@@ -16,8 +16,8 @@ engineering output. The plan was therefore layered:
 3. Make the default mode reproducible without any API key (replay), while keeping live model modes available through
    the same agent code so the design is honest about what an agent does at runtime.
 4. Put a thin host on top (CLI + HTTP API) and an Angular dashboard for the human-in-the-loop surfaces.
-5. Prove everything end to end: unit tests for the engine, the product's own tests, and CI jobs that run all three
-   scenarios headless and assert a rollback for an injected failure.
+5. Prove everything end to end: unit tests for the engine, the product's own tests, and headless runs of all three
+   scenarios plus an injected-failure run that must end in rollback (all reproducible from a fresh clone).
 
 Why this shape: the "critical differentiator" in the brief is governance that is **visible and testable**. A general
 workflow engine would have hidden exactly the parts the exercise evaluates; a linear chain would not demonstrate
@@ -38,7 +38,7 @@ unit tests pin each governance path.
 | Architecture overview | `ARCHITECTURE.md` |
 | Scenario write-ups (decomposition, orchestration trace, validation) | `docs/scenarios/` |
 | Testing approach | `docs/TESTING.md` |
-| CI pipeline | `.github/workflows/ci.yml` |
+| One-command wrappers (test, scenario, serve, shortener) | `run.ps1`, `run.sh` |
 | Per-run evidence (generated at run time) | `runs/<id>/state.json`, `audit.jsonl`, `workspace/`, `snapshots/` |
 
 ## Risks, trade-offs and validation

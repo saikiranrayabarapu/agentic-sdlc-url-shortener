@@ -137,7 +137,7 @@ tests/AgenticSdlc.Core.Tests, tests/UrlShortener.Api.Tests
 fixtures/replay/<scenario>/  recorded agent outputs + files/ referenced by them
 dashboard/                   Angular 22 UI
 docs/                        scenarios, testing, engineering summary, talking points
-.github/workflows/ci.yml     build + tests + dashboard; each scenario end to end; failure-injection must roll back
+run.ps1 / run.sh             one-command wrappers: test, scenario, serve, shortener
 runs/                        (generated, git-ignored) state.json · audit.jsonl · workspace/ · snapshots/
 ```
 

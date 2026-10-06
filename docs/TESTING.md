@@ -49,7 +49,8 @@ under load, which is why the expiry test now polls.
 ## 3. End-to-end - the orchestrated scenarios themselves
 
 Each `run <scenario>` is an end-to-end test: the verification stage builds and runs the **generated** workspace with
-the real .NET toolchain. CI runs all three scenarios headless plus the failure-injection run and asserts:
+the real .NET toolchain. Running all three scenarios headless plus the failure-injection run (`--auto-approve`, see the
+README quick start) checks:
 
 | Scenario | Expected | Verified by |
 |---|---|---|

@@ -10,7 +10,8 @@ design, implementation, tests, verification, docs and release as an explicit dep
 approvals, bounded retries, rollback and an audit trail. Second, a URL shortener that the engine builds and then
 evolves across three scenarios: from scratch, adding analytics to the existing code, and a deliberately vague
 'make it more reliable' request. The engine is tested on its own (33 tests), the shortener on its own (49 tests),
-and CI runs all three scenarios end to end, building and testing the generated code with the real .NET toolchain."
+and each scenario runs end to end from a fresh clone, building and testing the generated code with the real .NET
+toolchain."
 
 ## "Walk me through the architecture."
 
