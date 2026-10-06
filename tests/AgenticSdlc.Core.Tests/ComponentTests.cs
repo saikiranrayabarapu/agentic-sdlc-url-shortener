@@ -187,10 +187,17 @@ public sealed class WorkspaceTests
     [Theory]
     [InlineData("../escape.txt")]
     [InlineData("a/../../escape.txt")]
-    [InlineData("C:/Windows/evil.txt")]
-    public void Paths_cannot_escape_the_workspace(string path)
+    public void Relative_paths_cannot_escape_the_workspace(string path)
     {
         Assert.Throws<InvalidOperationException>(() => New().Resolve(path));
+    }
+
+    [Fact]
+    public void Absolute_paths_are_rejected_on_every_platform()
+    {
+        // Built from the OS temp root so the path is rooted on Windows (C:\...) and Linux (/tmp/...) alike.
+        var absolute = Path.Combine(Path.GetTempPath(), "evil.txt");
+        Assert.Throws<InvalidOperationException>(() => New().Resolve(absolute));
     }
 
     [Fact]
@@ -247,7 +254,7 @@ public sealed class LlmPlumbingTests
     }
 
     [Fact]
-    public void Fallback_client_uses_replay_when_live_provider_is_unavailable()
+    public async Task Fallback_client_uses_replay_when_live_provider_is_unavailable()
     {
         var root = Path.Combine(Path.GetTempPath(), "agentic-fallback", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "demo"));
@@ -257,7 +264,7 @@ public sealed class LlmPlumbingTests
         var fired = false;
         fallback.FellBack += (_, _) => fired = true;
 
-        var response = fallback.CompleteAsync(new LlmRequest { Scenario = "demo", NodeId = "design", Attempt = 1, SystemPrompt = "", UserPrompt = "", ExpectedSchema = "x" }, CancellationToken.None).Result;
+        var response = await fallback.CompleteAsync(new LlmRequest { Scenario = "demo", NodeId = "design", Attempt = 1, SystemPrompt = "", UserPrompt = "", ExpectedSchema = "x" }, CancellationToken.None);
 
         Assert.True(fired);
         Assert.Contains("from fixture", response.Text);
