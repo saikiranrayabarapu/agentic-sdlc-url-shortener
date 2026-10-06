@@ -1,0 +1,16 @@
+{
+  "summary": "Authored the test project: a hermetic WebApplicationFactory (isolated SQLite file per class), integration tests covering acceptance criteria AC1-AC8, and unit tests for the Base62 generator and the URL/alias validator.",
+  "impact": "Low",
+  "files": [
+    { "path": "UrlShortener.Api.Tests/UrlShortener.Api.Tests.csproj", "action": "create", "contentFile": "files/UrlShortener.Api.Tests/UrlShortener.Api.Tests.csproj", "reason": "xUnit + Microsoft.AspNetCore.Mvc.Testing, references the API project." },
+    { "path": "UrlShortener.Api.Tests/ApiFactory.cs", "action": "create", "contentFile": "files/UrlShortener.Api.Tests/ApiFactory.cs", "reason": "Boots the real app against a temp SQLite file; settings overridable per test class." },
+    { "path": "UrlShortener.Api.Tests/LinksApiTests.cs", "action": "create", "contentFile": "files/UrlShortener.Api.Tests/LinksApiTests.cs", "reason": "AC1 create, AC2 redirect, AC3 404, AC4 invalid URLs, AC5 alias/409, AC6 expiry/410, AC7 delete, AC8 health." },
+    { "path": "UrlShortener.Api.Tests/DomainTests.cs", "action": "create", "contentFile": "files/UrlShortener.Api.Tests/DomainTests.cs", "reason": "Generator length/alphabet/uniqueness; validator accept/reject matrix; alias rules." }
+  ],
+  "risks": [
+    "The expiry test sleeps ~600ms; acceptable but a clock abstraction would make it instantaneous."
+  ],
+  "assumptions": [
+    "Tests may run in parallel across classes because each class owns its database file."
+  ]
+}

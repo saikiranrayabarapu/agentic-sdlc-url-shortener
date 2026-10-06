@@ -1,59 +1,50 @@
-# Dashboard
+# Agentic SDLC dashboard
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.1.
+Angular dashboard for the orchestrator API served by `src/AgenticSdlc.Host`. Standalone components,
+Angular router, plain CSS, no UI component libraries.
 
-## Development server
+Pages:
 
-To start a local development server, run:
+- `/` Runs: table of runs (polled every 2s) and a "Start run" form.
+- `/runs/:id` Run detail: status header with Stop/Resume, stage graph in topological waves,
+  pending approval / clarification cards, decision lineage, metrics, artifacts, workspace browser,
+  and the incrementally polled, hash-chain-verifiable audit log.
+- `/metrics` Aggregated reliability metrics across all runs (overall, by status, by scenario).
 
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## Develop with `ng serve`
 
 ```bash
-ng generate component component-name
+# 1. start the API host (listens on http://localhost:5080)
+dotnet run --project src/AgenticSdlc.Host -- serve
+
+# 2. in another terminal
+cd dashboard
+npm install
+npm start          # = ng serve, http://localhost:4200
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+`angular.json` wires `proxy.conf.json` into `ng serve`, so every `/api/*` request from the dev
+server is forwarded to `http://localhost:5080`. The app only ever uses relative `/api/...` URLs.
+
+## Production build served by the .NET host
 
 ```bash
-ng generate --help
+cd dashboard
+npm run build      # outputs to dashboard/dist/dashboard/browser
+dotnet run --project src/AgenticSdlc.Host -- serve
 ```
 
-## Building
+`RepoPaths.Dashboard` in the host points at `dashboard/dist/dashboard/browser`. When that folder
+exists the host serves it as static files with an SPA fallback to `index.html`, so the dashboard and
+the API share the same origin (`http://localhost:5080`) and no proxy is needed.
 
-To build the project run:
+## Layout
 
-```bash
-ng build
 ```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
+src/app/api/models.ts          typed API models (camelCase JSON, PascalCase string enums)
+src/app/api/api.service.ts     ApiService: typed HttpClient wrapper over /api
+src/app/shared/format.ts       small formatting helpers
+src/app/pages/runs/            Runs list + start form
+src/app/pages/run-detail/      Run detail (graph.ts computes topological waves)
+src/app/pages/metrics/         Aggregate metrics
 ```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.

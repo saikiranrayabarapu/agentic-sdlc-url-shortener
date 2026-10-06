@@ -1,0 +1,161 @@
+<div class="stack">
+  <div class="card-title">
+    <h1>Metrics <span class="muted small">aggregated across all persisted runs</span></h1>
+    <div class="row">
+      <span class="tiny muted">refreshes every 5s</span>
+      <button (click)="refresh()" [disabled]="loading()">Refresh</button>
+    </div>
+  </div>
+
+  @if (error(); as e) {
+    <div class="error">{{ e }}</div>
+  }
+
+  @if (!metrics() && !error()) {
+    <div class="empty">Loading metrics…</div>
+  }
+
+  @if (metrics(); as m) {
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-title">
+          <h2>Overall</h2>
+        </div>
+        <table class="data kv">
+          <tbody>
+            <tr>
+              <td>Runs</td>
+              <td>{{ m.runs }}</td>
+            </tr>
+            <tr>
+              <td>Completed</td>
+              <td>{{ m.completed }}</td>
+            </tr>
+            <tr>
+              <td>Run success rate (of finished runs)</td>
+              <td>{{ m.runSuccessRate | percent: '1.0-1' }}</td>
+            </tr>
+            <tr>
+              <td>Node success rate</td>
+              <td>{{ m.nodeSuccessRate | percent: '1.0-1' }}</td>
+            </tr>
+            <tr>
+              <td>Retries</td>
+              <td>{{ m.retries }}</td>
+            </tr>
+            <tr>
+              <td>Repair cycles</td>
+              <td>{{ m.repairCycles }}</td>
+            </tr>
+            <tr>
+              <td>Rollbacks</td>
+              <td>{{ m.rollbacks }}</td>
+            </tr>
+            <tr>
+              <td>Re-plans</td>
+              <td>{{ m.replans }}</td>
+            </tr>
+            <tr>
+              <td>Policy violations</td>
+              <td>{{ m.policyViolations }}</td>
+            </tr>
+            <tr>
+              <td>Approvals granted / requested</td>
+              <td>{{ m.approvalsGranted }} / {{ m.approvalsRequested }}</td>
+            </tr>
+            <tr>
+              <td>Retry frequency (retries + repairs per run)</td>
+              <td>{{ m.retryFrequency }}</td>
+            </tr>
+            <tr>
+              <td>Rollback frequency (per run)</td>
+              <td>{{ m.rollbackFrequency }}</td>
+            </tr>
+            <tr>
+              <td>MTTR (mean)</td>
+              <td>{{ formatMs(m.mttrMs) }}</td>
+            </tr>
+            <tr>
+              <td>End-to-end latency · avg</td>
+              <td>{{ formatMs(m.endToEndLatencyMs.avg) }}</td>
+            </tr>
+            <tr>
+              <td>End-to-end latency · p50</td>
+              <td>{{ formatMs(m.endToEndLatencyMs.p50) }}</td>
+            </tr>
+            <tr>
+              <td>End-to-end latency · p95</td>
+              <td>{{ formatMs(m.endToEndLatencyMs.p95) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <div class="card-title">
+          <h2>By status</h2>
+        </div>
+        @if (!byStatus().length) {
+          <div class="empty">No runs yet.</div>
+        } @else {
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th class="num">Runs</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of byStatus(); track entry[0]) {
+                <tr>
+                  <td>
+                    <span [class]="'badge status-' + entry[0]">{{ entry[0] }}</span>
+                  </td>
+                  <td class="num">{{ entry[1] }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-title">
+        <h2>By scenario</h2>
+      </div>
+      @if (!byScenario().length) {
+        <div class="empty">No runs yet.</div>
+      } @else {
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Scenario</th>
+              <th class="num">Runs</th>
+              <th class="num">Completed</th>
+              <th class="num">Completion rate</th>
+              <th class="num">Avg end-to-end</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of byScenario(); track entry[0]) {
+              <tr>
+                <td>{{ entry[0] }}</td>
+                <td class="num">{{ entry[1].runs }}</td>
+                <td class="num">{{ entry[1].completed }}</td>
+                <td class="num">
+                  @if (rate(entry[1].completed, entry[1].runs); as r) {
+                    {{ r | percent: '1.0-1' }}
+                  } @else {
+                    {{ entry[1].runs ? '0%' : 'n/a' }}
+                  }
+                </td>
+                <td class="num">{{ entry[1].avgEndToEndMs ? formatMs(entry[1].avgEndToEndMs) : 'n/a' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+</div>

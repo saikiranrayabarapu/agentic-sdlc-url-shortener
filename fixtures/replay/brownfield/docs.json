@@ -1,0 +1,10 @@
+{
+  "summary": "Updated README with the stats endpoint, the asynchronous recording model and the UTC DateTime design note; added the 1.1.0 CHANGELOG entry.",
+  "impact": "Low",
+  "files": [
+    { "path": "README.md", "action": "modify", "contentFile": "files/README.md", "reason": "Document /stats, async analytics semantics, cascade delete." },
+    { "path": "CHANGELOG.md", "action": "modify", "contentFile": "files/CHANGELOG.md", "reason": "1.1.0 release notes." }
+  ],
+  "risks": [],
+  "assumptions": []
+}

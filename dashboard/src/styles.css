@@ -1,1 +1,410 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global styles: light theme, system font stack, compact tables/cards/badges. */
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --border: #e2e5ea;
+  --border-strong: #cfd4dc;
+  --text: #1c2330;
+  --muted: #6b7382;
+  --accent: #2563eb;
+  --accent-soft: #e8efff;
+  --danger: #dc2626;
+  --danger-soft: #fdecec;
+  --ok: #15803d;
+  --ok-soft: #e6f6ec;
+  --warn: #c2410c;
+  --warn-soft: #fff1e6;
+  --purple: #7c3aed;
+  --purple-soft: #f1eafe;
+  --blue: #2563eb;
+  --blue-soft: #e6efff;
+  --gray: #6b7382;
+  --gray-soft: #eef0f3;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+a {
+  color: var(--accent);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: 18px;
+}
+
+h2 {
+  font-size: 14px;
+}
+
+h3 {
+  font-size: 13px;
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+pre {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 420px;
+}
+
+/* Layout helpers */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12px;
+}
+
+.tiny {
+  font-size: 11px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.grow {
+  flex: 1 1 auto;
+}
+
+.empty {
+  color: var(--muted);
+  padding: 10px 0;
+  font-style: italic;
+}
+
+.error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid #f5c2c2;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.notice {
+  color: var(--ok);
+  background: var(--ok-soft);
+  border: 1px solid #bfe5cc;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+/* Tables */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+table.data th,
+table.data td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+table.data th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--surface-2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+table.data tbody tr:hover {
+  background: #fafbfd;
+}
+
+table.data td.num,
+table.data th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.kv td:first-child {
+  color: var(--muted);
+  width: 45%;
+}
+
+table.kv td:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+.table-wrap {
+  overflow: auto;
+  max-height: 520px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* Forms and buttons */
+label.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+input[type="text"],
+select,
+textarea {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 160px;
+}
+
+input[type="text"]:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #1d4fd7;
+}
+
+button.ok {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+button.ok:hover:not(:disabled) {
+  background: #116a33;
+}
+
+button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+button.danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+button.link {
+  border: none;
+  background: none;
+  color: var(--accent);
+  padding: 3px 6px;
+  text-align: left;
+  border-radius: 4px;
+}
+
+button.link:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+button.link.selected {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* Status badges. Run statuses and node statuses share one palette. */
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+  background: var(--gray-soft);
+  color: var(--gray);
+}
+
+.badge.status-Pending,
+.badge.status-Planned,
+.badge.status-Skipped {
+  background: var(--gray-soft);
+  color: var(--gray);
+}
+
+.badge.status-Running {
+  background: var(--blue-soft);
+  color: var(--blue);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.badge.status-AwaitingApproval,
+.badge.status-AwaitingClarification {
+  background: var(--purple-soft);
+  color: var(--purple);
+}
+
+.badge.status-Succeeded,
+.badge.status-Completed {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.badge.status-Failed,
+.badge.status-RolledBack {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge.status-Invalidated,
+.badge.status-Halted {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.badge.impact-Low {
+  background: var(--gray-soft);
+  color: var(--gray);
+}
+
+.badge.impact-Medium {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.badge.impact-High {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge.kind {
+  background: var(--surface-2);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}

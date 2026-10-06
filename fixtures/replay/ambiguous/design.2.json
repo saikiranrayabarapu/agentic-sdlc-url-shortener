@@ -1,0 +1,54 @@
+{
+  "overview": "Revised after the implementation stage rejected the Redis design: all reliability mechanisms are in-process and use only framework packages. ASP.NET Core's built-in fixed-window rate limiter guards link creation; a readiness probe checks SQLite connectivity; a small middleware propagates correlation ids; UseExceptionHandler/UseStatusCodePages give uniform problem details; the existing click writer's drain/retry behaviour is documented and tested.",
+  "components": [
+    { "name": "Program.cs", "responsibility": "AddRateLimiter (fixed window, policy 'create-link', PermitLimit from RateLimiting:CreatePerMinute), AddProblemDetails, UseExceptionHandler, UseStatusCodePages, CorrelationIdMiddleware, UseRateLimiter." },
+    { "name": "Endpoints/RateLimitPolicies", "responsibility": "Policy name constant shared by registration and endpoint." },
+    { "name": "Endpoints/LinkEndpoints.MapHealthEndpoints", "responsibility": "/health (liveness) and /health/ready (CanConnectAsync -> 200/503 problem)." },
+    { "name": "Endpoints/LinkEndpoints.MapLinkEndpoints", "responsibility": "RequireRateLimiting on POST only." },
+    { "name": "Infrastructure/CorrelationIdMiddleware", "responsibility": "Echo incoming X-Correlation-Id (<=128 chars) or use TraceIdentifier; set on response start." },
+    { "name": "Analytics/ClickRecorder (existing)", "responsibility": "Graceful drain on stop; 3-attempt backoff on SQLite lock - unchanged." }
+  ],
+  "apiContract": [
+    { "method": "POST", "path": "/api/links", "description": "Rate limited (429 when exceeded)", "responses": ["201", "400", "409", "429"] },
+    { "method": "GET", "path": "/health/ready", "description": "Readiness: database connectivity", "responses": ["200", "503"] },
+    { "method": "GET", "path": "/health", "description": "Liveness (unchanged)", "responses": ["200"] }
+  ],
+  "dataModel": [],
+  "decisions": [
+    {
+      "id": "ADR-8 (revised)",
+      "decision": "Use the built-in ASP.NET Core fixed-window rate limiter, in-process, scoped to link creation.",
+      "alternatives": ["Redis-backed distributed limiter (rejected: violates the 'no new infrastructure' constraint and the dependency allow-list)", "Token bucket", "Per-IP partitioning"],
+      "rationale": "Clarification Q2 forbids new infrastructure; the clarified scope is single-instance. The framework limiter needs no package and is configurable. A per-instance limit is explicitly documented as a limitation.",
+      "tradeoffs": "Limits are per instance; scaling out requires revisiting. Fixed window allows short bursts at window edges, acceptable for abuse protection."
+    },
+    {
+      "id": "ADR-9",
+      "decision": "Separate liveness (/health) from readiness (/health/ready).",
+      "alternatives": ["Single /health that also checks the database"],
+      "rationale": "A database outage should pull the instance out of rotation (readiness) without restarting it (liveness).",
+      "tradeoffs": "Two endpoints to document and monitor."
+    },
+    {
+      "id": "ADR-10",
+      "decision": "Correlation id via a tiny custom middleware instead of a package.",
+      "alternatives": ["Third-party correlation packages"],
+      "rationale": "Twelve lines of code, no dependency, exact control over header name and length cap.",
+      "tradeoffs": "No W3C traceparent integration yet."
+    }
+  ],
+  "filePlan": [
+    { "path": "UrlShortener.Api/Program.cs", "purpose": "Modify: limiter, problem details, exception handler, middleware order." },
+    { "path": "UrlShortener.Api/Endpoints/LinkEndpoints.cs", "purpose": "Modify: readiness route, RateLimitPolicies, RequireRateLimiting on create." },
+    { "path": "UrlShortener.Api/Infrastructure/CorrelationIdMiddleware.cs", "purpose": "New middleware." },
+    { "path": "UrlShortener.Api/appsettings.json", "purpose": "Modify: RateLimiting:CreatePerMinute." },
+    { "path": "UrlShortener.Api.Tests/ReliabilityTests.cs", "purpose": "New: readiness, correlation, problem details, rate limit (own factory with limit 3)." }
+  ],
+  "testStrategy": "Existing suites are the regression gate (the shared test factory raises the limit to 1000 so they are unaffected). A dedicated RateLimitTests class uses its own factory with CreatePerMinute=3 to observe 3x201 + 2x429 deterministically. ReliabilityTests cover readiness, correlation echo/generation and problem+json content type. Operational readiness is additionally verified by the orchestrator's deterministic operability checks.",
+  "securityConsiderations": [
+    "Rate limiting reduces abuse of link creation (spam/phishing at scale).",
+    "Correlation id length is capped to prevent header-based log flooding.",
+    "Problem details never include stack traces."
+  ],
+  "externalDependencies": []
+}

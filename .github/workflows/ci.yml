@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    name: Build, unit tests, dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (warnings as errors for the service)
+        run: dotnet build --no-restore -c Release
+
+      - name: Test (orchestrator + URL shortener)
+        run: dotnet test --no-build -c Release --logger "trx;LogFileName=results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/TestResults/*.trx"
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Build dashboard
+        working-directory: dashboard
+        run: |
+          npm ci
+          npm run build
+
+  scenarios:
+    name: Replay scenario (${{ matrix.scenario }})
+    runs-on: ubuntu-latest
+    needs: build-test
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [greenfield, brownfield, ambiguous]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # Each scenario runs the orchestrator headless in replay mode. The verification stage builds and tests the
+      # generated workspace with the real toolchain, so a green job proves the end-to-end pipeline produced working code.
+      - name: Run orchestrated scenario
+        run: dotnet run --project src/AgenticSdlc.Host -c Release -- run ${{ matrix.scenario }} --auto-approve
+
+      - name: Verify audit chain
+        run: |
+          RUN_ID=$(ls runs | head -n 1)
+          dotnet run --project src/AgenticSdlc.Host -c Release --no-build -- audit "$RUN_ID" --verify
+
+      - name: Upload run artefacts (state, audit log)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-${{ matrix.scenario }}
+          path: |
+            runs/**/state.json
+            runs/**/audit.jsonl
+
+  governance-demo:
+    name: Failure injection ends in rollback
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      # Exit code 1 is the expected outcome here: the run must NOT complete. The step asserts the final status instead.
+      - name: Inject a verification failure and expect RolledBack
+        run: |
+          set +e
+          dotnet run --project src/AgenticSdlc.Host -c Release -- run brownfield --auto-approve --inject-failure verification
+          RUN_ID=$(ls runs | head -n 1)
+          grep -q '"status": "RolledBack"' "runs/$RUN_ID/state.json" && echo "Rollback confirmed" || { echo "Expected RolledBack"; exit 1; }

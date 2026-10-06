@@ -1,0 +1,27 @@
+{
+  "summary": "Reliability hardening is ready to release within the clarified scope (operational resilience, no new infrastructure). The ambiguous requirement was resolved through an explicit human clarification, the plan was extended with an operational-readiness gate, an infeasible Redis design was rejected by the implementation stage and revised, and the final build, full test suite and all operability checks pass.",
+  "checklist": [
+    { "item": "Requirement ambiguity resolved and recorded", "status": "Pass", "evidence": "ClarificationAnswered event with Q1-Q3 answers; requirements attempt 2 reflects them" },
+    { "item": "Design consistent with clarified constraints", "status": "Pass", "evidence": "Design attempt 2 has no external dependencies after the change request on attempt 1" },
+    { "item": "Build succeeds", "status": "Pass", "evidence": "Verification: buildSucceeded=true" },
+    { "item": "All tests pass including pre-existing suites", "status": "Pass", "evidence": "Verification: testsFailed=0" },
+    { "item": "Operational readiness checks", "status": "Pass", "evidence": "ops-readiness node: health, readiness, rate limiter, graceful shutdown, problem details, correlation id, run docs" },
+    { "item": "Human approval of changes to existing files", "status": "Pass", "evidence": "ApprovalDecided for implementation" },
+    { "item": "Policy guardrails", "status": "Pass", "evidence": "No blocking findings" },
+    { "item": "Multi-instance readiness", "status": "Warn", "evidence": "Rate limits are per instance by design (ADR-8 revised); revisit before scaling out" },
+    { "item": "Schema migrations", "status": "Warn", "evidence": "Still EnsureCreated; durability track deferred per Q1" }
+  ],
+  "riskRegister": [
+    { "risk": "Per-instance rate limits are bypassable by spreading load across instances", "likelihood": "Low", "impact": "Medium", "mitigation": "Single instance today; adopt a shared limiter store when scaling out." },
+    { "risk": "Fixed-window edge bursts (up to 2x limit)", "likelihood": "Medium", "impact": "Low", "mitigation": "Acceptable for abuse protection; switch to sliding window if needed." },
+    { "risk": "Readiness flaps during brief SQLite lock contention", "likelihood": "Low", "impact": "Low", "mitigation": "CanConnect is lightweight; orchestrators should require several consecutive failures." },
+    { "risk": "Interpretation drift - stakeholder meant durability or availability", "likelihood": "Medium", "impact": "Medium", "mitigation": "Clarification answers are recorded in the audit trail and decision lineage; the other two interpretations are documented as follow-ups." }
+  ],
+  "rollbackPlan": "Redeploy v1.1 binaries; no schema change was made so the database is untouched. Within the orchestrator, restore the pre-implementation snapshot.",
+  "knownLimitations": [
+    "Rate limiting is per process.",
+    "No migrations/backups (durability interpretation deferred).",
+    "No distributed tracing beyond a correlation header."
+  ],
+  "recommendation": "Approve"
+}

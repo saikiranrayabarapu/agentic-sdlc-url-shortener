@@ -1,0 +1,10 @@
+{
+  "summary": "Documented the reliability features (rate limiting, readiness vs liveness, correlation ids, problem details, graceful drain, write retry, bounded buffering), the new configuration key and the per-instance limitation; added the 1.2.0 CHANGELOG entry.",
+  "impact": "Low",
+  "files": [
+    { "path": "README.md", "action": "modify", "contentFile": "files/README.md", "reason": "Reliability features table, /health/ready, 429 on create, RateLimiting config, design note on per-instance limits." },
+    { "path": "CHANGELOG.md", "action": "modify", "contentFile": "files/CHANGELOG.md", "reason": "1.2.0 release notes." }
+  ],
+  "risks": [],
+  "assumptions": []
+}

@@ -1,0 +1,10 @@
+{
+  "summary": "Cannot implement the design as specified: it requires the StackExchange.Redis package and a running Redis server. The reviewer's clarification Q2 ruled out new infrastructure, the dependency allow-list (CMP-001) does not include StackExchange.Redis, and the test strategy (Redis test container) cannot run on the reviewer's machine (no Docker). Requesting a design revision using in-process mechanisms.",
+  "impact": "High",
+  "changeRequest": {
+    "targetNodeId": "design",
+    "reason": "Design ADR-8 depends on Redis (external infrastructure + non-approved package StackExchange.Redis), which contradicts clarified constraint Q2 ('no new external infrastructure; approved packages only') and would be blocked by policy CMP-001. Please redesign rate limiting with the in-process ASP.NET Core rate limiter and drop the Redis readiness dependency."
+  },
+  "risks": ["Proceeding with Redis would fail the policy gate and leave the service un-runnable without Docker."],
+  "assumptions": []
+}

@@ -1,0 +1,9 @@
+{
+  "summary": "Added StatsApiTests covering asynchronous click recording, aggregation shape (7-day buckets, top referrers, direct grouping), zero-state, unknown-link 404 and redirect-latency independence. Existing LinksApiTests and DomainTests remain unchanged as the regression gate.",
+  "impact": "Low",
+  "files": [
+    { "path": "UrlShortener.Api.Tests/StatsApiTests.cs", "action": "create", "contentFile": "files/UrlShortener.Api.Tests/StatsApiTests.cs", "reason": "AC1 referrer aggregation, AC2 7-day shape, AC3 zero state, AC4 404, AC5 latency + eventual completeness." }
+  ],
+  "risks": ["Tests poll for eventual consistency with a 10s bound; on a very slow CI agent this bound may need raising."],
+  "assumptions": ["The test factory already isolates the SQLite file per class, so the new class needs no fixture changes."]
+}

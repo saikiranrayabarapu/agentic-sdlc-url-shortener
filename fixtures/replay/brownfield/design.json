@@ -1,0 +1,57 @@
+{
+  "overview": "Additive analytics slice: a ClickEvent entity, a bounded in-memory ClickQueue (System.Threading.Channels) fed by the redirect handler, a ClickRecorder BackgroundService that persists batches with retry and drains on shutdown, and a stats endpoint that aggregates in SQL plus a small in-memory projection for the 7-day/top-referrer views. Existing endpoints are untouched apart from one enqueue call in RedirectAsync.",
+  "components": [
+    { "name": "Domain/ClickEvent", "responsibility": "Entity: LinkId, OccurredAtUtc (DateTime), Referrer?, UserAgent?." },
+    { "name": "Analytics/ClickQueue", "responsibility": "Bounded channel (10k, DropOldest) + drop counter; single reader, many writers." },
+    { "name": "Analytics/ClickRecorder", "responsibility": "Hosted service: read up to 100 events, SaveChanges with 3-attempt backoff, final drain on stop." },
+    { "name": "Endpoints/LinkEndpoints.RedirectAsync", "responsibility": "Enqueue click after lookup, before returning 302." },
+    { "name": "Endpoints/LinkEndpoints.GetStatsAsync", "responsibility": "Aggregate totals/last/7-day/top-5 and return LinkStatsResponse." },
+    { "name": "Data/AppDbContext", "responsibility": "Clicks DbSet, composite index (LinkId, OccurredAtUtc), cascade FK." }
+  ],
+  "apiContract": [
+    { "method": "GET", "path": "/api/links/{code}/stats", "description": "Click analytics for a link", "responses": ["200", "404"] },
+    { "method": "GET", "path": "/{code}", "description": "Redirect; now records a click (contract unchanged)", "responses": ["302", "404", "410"] }
+  ],
+  "dataModel": [
+    { "entity": "ClickEvent", "fields": ["Id: long PK", "LinkId: long FK -> ShortLink (cascade)", "OccurredAtUtc: DateTime (UTC)", "Referrer: string(2048)?", "UserAgent: string(512)?"] }
+  ],
+  "decisions": [
+    {
+      "id": "ADR-5",
+      "decision": "Record clicks asynchronously via a bounded Channel and a BackgroundService instead of writing inline in the redirect.",
+      "alternatives": ["Synchronous insert before 302", "External queue (e.g. a message broker)"],
+      "rationale": "The requirement forbids slowing redirects; an in-process bounded channel gives that with zero new infrastructure. A broker is out of proportion for a single-instance SQLite service.",
+      "tradeoffs": "Eventual consistency (clicks visible within ~250ms); bounded loss under extreme overload, which is counted and acceptable per NFR2."
+    },
+    {
+      "id": "ADR-6",
+      "decision": "Store OccurredAt as a UTC DateTime column, not DateTimeOffset.",
+      "alternatives": ["DateTimeOffset (as used on ShortLink)"],
+      "rationale": "The EF Core SQLite provider cannot translate comparisons, ordering or MAX over DateTimeOffset; the stats queries need all three.",
+      "tradeoffs": "Slight inconsistency with ShortLink timestamps; documented."
+    },
+    {
+      "id": "ADR-7",
+      "decision": "Aggregate counts/last-click in SQL but compute the 7-day buckets and top referrers in memory from the last-7-days slice.",
+      "alternatives": ["Pure SQL GROUP BY date(...)"],
+      "rationale": "SQLite date functions are not portably translated by EF Core; the 7-day slice per link is small, so an in-memory projection is simpler and provider-neutral.",
+      "tradeoffs": "Memory proportional to a week of clicks for one link; fine at this scale."
+    }
+  ],
+  "filePlan": [
+    { "path": "UrlShortener.Api/Domain/ClickEvent.cs", "purpose": "New entity." },
+    { "path": "UrlShortener.Api/Analytics/ClickQueue.cs", "purpose": "New bounded queue." },
+    { "path": "UrlShortener.Api/Analytics/ClickRecorder.cs", "purpose": "New background writer." },
+    { "path": "UrlShortener.Api/Data/AppDbContext.cs", "purpose": "Modify: Clicks DbSet, index, FK." },
+    { "path": "UrlShortener.Api/Contracts/Dtos.cs", "purpose": "Modify: stats response records." },
+    { "path": "UrlShortener.Api/Endpoints/LinkEndpoints.cs", "purpose": "Modify: enqueue in redirect, add stats route/handler." },
+    { "path": "UrlShortener.Api/Program.cs", "purpose": "Modify: register queue and hosted service." },
+    { "path": "UrlShortener.Api.Tests/StatsApiTests.cs", "purpose": "New integration tests AC1-AC5." }
+  ],
+  "testStrategy": "Keep all v1 tests untouched as the regression gate. Add StatsApiTests that drive real redirects through the pipeline and poll the stats endpoint until the asynchronous writer catches up (bounded wait), asserting shape, counts, referrer grouping and that 20 redirects stay fast.",
+  "securityConsiderations": [
+    "Referrer and User-Agent are attacker-controlled: truncate to 2048/512 and store as plain text, never interpolate into SQL or HTML.",
+    "Stats endpoint is read-only and exposes no PII beyond referrer URLs."
+  ],
+  "externalDependencies": []
+}

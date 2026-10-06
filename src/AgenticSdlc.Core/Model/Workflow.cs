@@ -31,7 +31,7 @@ public sealed class WorkflowDefinition
     public int MaxRepairCycles { get; init; } = 2;
 
     /// <summary>Upper bound on dynamic re-plans (design change requests, clarification-driven re-planning).</summary>
-    public int MaxReplans { get; init; } = 2;
+    public int MaxReplans { get; init; } = 3;
 
     public StageNode Node(string id) => Nodes.First(n => n.Id == id);
 

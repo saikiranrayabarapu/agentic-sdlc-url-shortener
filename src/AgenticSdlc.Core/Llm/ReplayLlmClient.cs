@@ -23,7 +23,7 @@ public sealed class ReplayLlmClient : ILlmClient
 
     public bool HasFixture(string scenario, string nodeId, int attempt) => ResolvePath(scenario, nodeId, attempt) is not null;
 
-    public Task<LlmResponse> CompleteAsync(LlmRequest request, CancellationToken ct)
+    public async Task<LlmResponse> CompleteAsync(LlmRequest request, CancellationToken ct)
     {
         var started = DateTime.UtcNow;
         var path = ResolvePath(request.Scenario, request.NodeId, request.Attempt)
@@ -34,17 +34,17 @@ public sealed class ReplayLlmClient : ILlmClient
         var node = LoadFixture(path);
 
         // Simulate a small amount of model latency so timing metrics are non-trivial and parallelism is observable.
-        Thread.Sleep(Random.Shared.Next(120, 260));
+        await Task.Delay(Random.Shared.Next(150, 400), ct);
 
         var text = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-        return Task.FromResult(new LlmResponse
+        return new LlmResponse
         {
             Text = text,
             Provider = Name,
             Model = "recorded",
             FromReplay = true,
             LatencyMs = (DateTime.UtcNow - started).TotalMilliseconds
-        });
+        };
     }
 
     /// <summary>Loads a fixture and expands any <c>contentFile</c> references relative to the fixture's folder.</summary>
@@ -55,15 +55,33 @@ public sealed class ReplayLlmClient : ILlmClient
         return node;
     }
 
+    /// <summary>
+    /// Resolution order: exact attempt file, then the attempt-less file, then the highest recorded earlier attempt
+    /// (so a third repair attempt replays the last known response instead of failing for lack of a recording).
+    /// </summary>
     private string? ResolvePath(string scenario, string nodeId, int attempt)
     {
         var dir = Path.Combine(_fixturesRoot, scenario);
-        var candidates = new[]
-        {
-            Path.Combine(dir, $"{nodeId}.{attempt}.json"),
-            Path.Combine(dir, $"{nodeId}.json")
-        };
-        return candidates.FirstOrDefault(File.Exists);
+        if (!Directory.Exists(dir)) return null;
+
+        var exact = Path.Combine(dir, $"{nodeId}.{attempt}.json");
+        if (File.Exists(exact)) return exact;
+
+        var generic = Path.Combine(dir, $"{nodeId}.json");
+        if (File.Exists(generic)) return generic;
+
+        return Directory.GetFiles(dir, $"{nodeId}.*.json")
+            .Select(p => (Path: p, Attempt: AttemptOf(p)))
+            .Where(x => x.Attempt > 0 && x.Attempt < attempt)
+            .OrderByDescending(x => x.Attempt)
+            .Select(x => x.Path)
+            .FirstOrDefault();
+    }
+
+    private static int AttemptOf(string path)
+    {
+        var parts = Path.GetFileNameWithoutExtension(path).Split('.');
+        return parts.Length > 1 && int.TryParse(parts[^1], out var n) ? n : 0;
     }
 
     private static void ExpandContentFiles(JsonNode node, string baseDir)

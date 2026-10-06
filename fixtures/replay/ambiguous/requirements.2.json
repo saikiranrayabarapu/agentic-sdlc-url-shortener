@@ -1,0 +1,36 @@
+{
+  "problemStatement": "Harden the URL shortener's operational resilience without new infrastructure: protect link creation from abuse with rate limiting, expose a readiness probe that reflects database connectivity, propagate correlation ids, return consistent problem responses for every error path, and prove graceful shutdown and transient-error retry of the click writer - all while keeping existing behaviour and tests intact.",
+  "functionalRequirements": [
+    "FR1: POST /api/links is rate limited per fixed one-minute window; excess requests receive 429 Too Many Requests. Redirects and reads are not limited.",
+    "FR2: GET /health/ready returns 200 when the database is reachable and 503 with problem details when it is not; GET /health stays a pure liveness check.",
+    "FR3: Every response carries X-Correlation-Id: the incoming header is echoed (max 128 chars), otherwise a trace identifier is generated.",
+    "FR4: Unhandled exceptions and bare status codes are rendered as RFC 7807 problem details (application/problem+json).",
+    "FR5: The click writer flushes buffered events on shutdown and retries transient SQLite lock errors with backoff (existing behaviour, now documented and covered)."
+  ],
+  "nonFunctionalRequirements": [
+    "NFR1: No new external services or non-approved packages (clarified Q2).",
+    "NFR2: Limits are configurable (RateLimiting:CreatePerMinute, default 30) (clarified Q3).",
+    "NFR3: Existing endpoints keep their contracts; existing tests pass unchanged except for test infrastructure raising the limit.",
+    "NFR4: Operability checks (health, readiness, rate limiting, graceful shutdown, problem details, correlation id, run docs) are verifiable from the code base."
+  ],
+  "acceptanceCriteria": [
+    "AC1: With CreatePerMinute=3, five rapid POST /api/links yield exactly three 201 and two 429.",
+    "AC2: GET /unknown-code still returns 404 under the create limit (redirects are not throttled).",
+    "AC3: GET /health/ready returns 200 against a working database.",
+    "AC4: A request with X-Correlation-Id: test-corr-123 gets the same value back; a request without it gets a non-empty generated id.",
+    "AC5: A validation failure returns application/problem+json with status 400.",
+    "AC6: The complete pre-existing test suite passes."
+  ],
+  "assumptions": [
+    "A1: Per-instance in-process rate limiting is acceptable for a single-instance deployment (Q2/Q3).",
+    "A2: Durability work (EF migrations) remains a documented follow-up, not part of this change (Q1 chose operational resilience)."
+  ],
+  "outOfScope": ["Multi-instance / distributed rate limiting", "Database migrations and backups", "Authentication"],
+  "ambiguities": [
+    { "id": "Q1", "question": "What does 'reliable' mean for this service?", "options": [], "defaultAssumption": "Resolved by reviewer: operational resilience", "impact": "Low" },
+    { "id": "Q2", "question": "May the solution introduce new infrastructure?", "options": [], "defaultAssumption": "Resolved by reviewer: no", "impact": "Low" },
+    { "id": "Q3", "question": "Measurable target?", "options": [], "defaultAssumption": "Resolved by reviewer: sensible configurable defaults", "impact": "Low" }
+  ],
+  "riskLevel": "Medium",
+  "needsClarification": false
+}

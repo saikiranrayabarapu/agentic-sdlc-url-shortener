@@ -168,12 +168,13 @@ public sealed class Orchestrator
                 }
 
                 using var gate = new SemaphoreSlim(_options.MaxParallelism);
-                var tasks = ready.Select(async node =>
+                // Task.Run guarantees nodes in the same wave really execute concurrently even when an agent completes synchronously.
+                var tasks = ready.Select(node => Task.Run(async () =>
                 {
                     await gate.WaitAsync(ct);
                     try { await ExecuteNodeAsync(run, node, workspace, audit, ct); }
                     finally { gate.Release(); }
-                }).ToList();
+                }, ct)).ToList();
                 await Task.WhenAll(tasks);
 
                 if (run.Status is not RunStatus.Running) break;
@@ -296,6 +297,23 @@ public sealed class Orchestrator
     {
         var impact = result.Impact;
         PolicyResult? policy = null;
+
+        // ---- Staleness gate: an upstream stage was invalidated while this node was running (e.g. a change request).
+        //      The result was computed from superseded inputs, so discard it and let the scheduler re-run the node.
+        string? staleDependency;
+        lock (_sync) staleDependency = node.DependsOn.FirstOrDefault(d => run.Nodes[d].Status != NodeStatus.Succeeded);
+        if (staleDependency is not null)
+        {
+            lock (_sync)
+            {
+                state.Status = NodeStatus.Pending;
+                state.Feedback = $"Upstream stage '{staleDependency}' changed while this stage was running; re-run with the new inputs.";
+                _store.Save(run);
+            }
+            audit.Append(run.RunId, AuditTypes.NodeInvalidated, Actor.System,
+                $"'{node.Id}' attempt {attempt} result discarded: upstream '{staleDependency}' was invalidated during execution", node.Id, attempt);
+            return SuccessOutcome.Done;
+        }
 
         // ---- Policy guardrails (change-control gate) ----
         if (result.ChangeSet is not null)
@@ -440,7 +458,14 @@ public sealed class Orchestrator
 
         if (!decision.Approved)
         {
-            lock (_sync) { state.Status = NodeStatus.Failed; state.LastError = "Rejected by reviewer"; }
+            // A rejection is not a stage failure: the proposal goes back to Pending with the reviewer's comment as feedback,
+            // so `resume` re-runs the stage and the agent revises its proposal before approval is requested again.
+            lock (_sync)
+            {
+                state.Status = NodeStatus.Pending;
+                state.LastError = $"Rejected by {decision.Approver}";
+                state.Feedback = $"The reviewer ({decision.Approver}) rejected the previous proposal{(decision.Comment is null ? "." : $": {decision.Comment}")} Revise it before resubmitting.";
+            }
             Halt(run, audit, $"Change rejected by {decision.Approver}{(decision.Comment is null ? "" : $": {decision.Comment}")}", "Reject");
             return false;
         }

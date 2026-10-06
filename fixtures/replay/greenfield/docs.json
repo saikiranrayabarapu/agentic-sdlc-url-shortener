@@ -1,0 +1,10 @@
+{
+  "summary": "Wrote the service README (run, test, API reference, validation rules, configuration, design notes) and the initial CHANGELOG entry.",
+  "impact": "Low",
+  "files": [
+    { "path": "README.md", "action": "create", "contentFile": "files/README.md", "reason": "Run/test instructions, endpoint table, request example, configuration keys, design notes." },
+    { "path": "CHANGELOG.md", "action": "create", "contentFile": "files/CHANGELOG.md", "reason": "1.0.0 release notes." }
+  ],
+  "risks": [],
+  "assumptions": ["Documentation lives in the workspace root alongside the two projects."]
+}

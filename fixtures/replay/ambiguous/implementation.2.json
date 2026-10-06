@@ -1,0 +1,15 @@
+{
+  "summary": "Implemented the revised (in-process) reliability design: fixed-window rate limiter on link creation with configurable limit, readiness probe checking SQLite connectivity, correlation-id middleware, uniform problem-details handling for exceptions and status codes. Existing endpoints and the click writer are unchanged.",
+  "impact": "Medium",
+  "files": [
+    { "path": "UrlShortener.Api/Program.cs", "action": "modify", "contentFile": "files/UrlShortener.Api/Program.cs", "reason": "AddRateLimiter + policy, AddProblemDetails, UseExceptionHandler/UseStatusCodePages, CorrelationIdMiddleware, UseRateLimiter (ADR-8 revised, ADR-10)." },
+    { "path": "UrlShortener.Api/Endpoints/LinkEndpoints.cs", "action": "modify", "contentFile": "files/UrlShortener.Api/Endpoints/LinkEndpoints.cs", "reason": "RateLimitPolicies constant, RequireRateLimiting on POST, /health/ready readiness route (ADR-9)." },
+    { "path": "UrlShortener.Api/Infrastructure/CorrelationIdMiddleware.cs", "action": "create", "contentFile": "files/UrlShortener.Api/Infrastructure/CorrelationIdMiddleware.cs", "reason": "Echo or generate X-Correlation-Id (FR3)." },
+    { "path": "UrlShortener.Api/appsettings.json", "action": "modify", "contentFile": "files/UrlShortener.Api/appsettings.json", "reason": "RateLimiting:CreatePerMinute default 30 (NFR2)." }
+  ],
+  "risks": [
+    "Per-instance limits only; documented as a known limitation.",
+    "Fixed window permits edge bursts up to 2x the limit across a boundary."
+  ],
+  "assumptions": ["Single-instance deployment per clarification Q2/Q3."]
+}

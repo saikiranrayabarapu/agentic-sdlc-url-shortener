@@ -1,0 +1,58 @@
+{
+  "problemStatement": "Provide an HTTP service that maps long URLs to short, shareable codes and redirects visitors to the original URL, with optional custom aliases and expiry, durable SQLite storage, input validation, a health endpoint, automated tests and run documentation.",
+  "functionalRequirements": [
+    "FR1: POST /api/links accepts a long URL and returns a short code plus the full short URL (201 Created).",
+    "FR2: GET /{code} redirects (302) to the original URL; unknown codes return 404.",
+    "FR3: Callers may supply a custom alias; a taken alias returns 409 Conflict.",
+    "FR4: Callers may supply an expiry timestamp; expired links return 410 Gone and past expiry on create is rejected.",
+    "FR5: GET /api/links/{code} returns link metadata; DELETE /api/links/{code} removes the link (204/404).",
+    "FR6: Only absolute http/https URLs are accepted; malformed or non-http(s) URLs return 400 with problem details.",
+    "FR7: GET /health returns 200 while the process is alive.",
+    "FR8: Links are persisted in SQLite and survive process restarts."
+  ],
+  "nonFunctionalRequirements": [
+    "NFR1: Zero-step local setup - the database is created automatically on first start.",
+    "NFR2: Short codes are unpredictable (cryptographic RNG) and collision-safe (unique index + bounded retry).",
+    "NFR3: The service must not be usable to probe internal networks: loopback/private hosts are rejected by default.",
+    "NFR4: All error responses use RFC 7807 problem details.",
+    "NFR5: Automated tests run with `dotnet test` in under a minute without external services."
+  ],
+  "acceptanceCriteria": [
+    "AC1: Creating a link for https://example.com/x returns 201, a 7-character Base62 code and a shortUrl ending in that code.",
+    "AC2: GET /{code} for a created link returns 302 with Location equal to the original URL.",
+    "AC3: GET /{unknown} returns 404.",
+    "AC4: POST with ftp://, javascript:, an empty string, a relative URL, a loopback host or embedded credentials returns 400.",
+    "AC5: Creating with customAlias 'my-alias' returns code 'my-alias'; creating again with the same alias returns 409.",
+    "AC6: A link whose expiresAt has passed returns 410 on redirect; creating with a past expiresAt returns 400.",
+    "AC7: DELETE removes the link so GET /api/links/{code} returns 404 afterwards; deleting again returns 404.",
+    "AC8: GET /health returns 200."
+  ],
+  "assumptions": [
+    "A1: No authentication is required for the first version (public shortener); link deletion is unauthenticated and documented as such.",
+    "A2: 302 (temporary) redirects are used so analytics can be added later without browsers caching the redirect.",
+    "A3: A single-instance deployment with SQLite is acceptable for this iteration; horizontal scaling is out of scope."
+  ],
+  "outOfScope": [
+    "Click analytics and reporting",
+    "Rate limiting and abuse protection beyond input validation",
+    "User accounts, API keys, link ownership"
+  ],
+  "ambiguities": [
+    {
+      "id": "Q1",
+      "question": "Should the same long URL always map to the same code (idempotent create) or create a new code each time?",
+      "options": ["New code per request", "Reuse existing code for identical URL"],
+      "defaultAssumption": "New code per request - simpler, avoids leaking that a URL was already shortened by someone else.",
+      "impact": "Low"
+    },
+    {
+      "id": "Q2",
+      "question": "Which redirect status code: 301 (permanent, cacheable) or 302 (temporary)?",
+      "options": ["301", "302"],
+      "defaultAssumption": "302 so future analytics see every click.",
+      "impact": "Low"
+    }
+  ],
+  "riskLevel": "Medium",
+  "needsClarification": false
+}

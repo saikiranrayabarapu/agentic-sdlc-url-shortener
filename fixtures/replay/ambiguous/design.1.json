@@ -1,0 +1,33 @@
+{
+  "overview": "Operational resilience slice built around a Redis-backed distributed rate limiter so that limits hold across future instances, plus a readiness probe, correlation-id middleware and problem-details hardening.",
+  "components": [
+    { "name": "Infrastructure/RedisRateLimiter", "responsibility": "Sliding-window counter per client IP stored in Redis (StackExchange.Redis), shared by all instances." },
+    { "name": "Infrastructure/CorrelationIdMiddleware", "responsibility": "Echo or generate X-Correlation-Id." },
+    { "name": "Endpoints/LinkEndpoints.MapHealthEndpoints", "responsibility": "Add /health/ready checking SQLite and Redis connectivity." },
+    { "name": "Program.cs", "responsibility": "Register Redis connection multiplexer, limiter, exception handler, middleware." }
+  ],
+  "apiContract": [
+    { "method": "POST", "path": "/api/links", "description": "Now rate limited", "responses": ["201", "400", "409", "429"] },
+    { "method": "GET", "path": "/health/ready", "description": "Readiness (SQLite + Redis)", "responses": ["200", "503"] }
+  ],
+  "dataModel": [],
+  "decisions": [
+    {
+      "id": "ADR-8",
+      "decision": "Use a Redis-backed sliding-window rate limiter.",
+      "alternatives": ["ASP.NET Core in-process rate limiter"],
+      "rationale": "A shared store makes limits consistent if the service is scaled out later.",
+      "tradeoffs": "Introduces a Redis dependency and a new NuGet package (StackExchange.Redis)."
+    }
+  ],
+  "filePlan": [
+    { "path": "UrlShortener.Api/UrlShortener.Api.csproj", "purpose": "Add StackExchange.Redis." },
+    { "path": "UrlShortener.Api/Infrastructure/RedisRateLimiter.cs", "purpose": "Limiter implementation." },
+    { "path": "UrlShortener.Api/Infrastructure/CorrelationIdMiddleware.cs", "purpose": "Correlation ids." },
+    { "path": "UrlShortener.Api/Program.cs", "purpose": "Registrations." },
+    { "path": "UrlShortener.Api/Endpoints/LinkEndpoints.cs", "purpose": "Readiness route." }
+  ],
+  "testStrategy": "Integration tests with a Redis test container.",
+  "securityConsiderations": ["Redis connection string must come from configuration, never source."],
+  "externalDependencies": ["StackExchange.Redis", "Redis server"]
+}

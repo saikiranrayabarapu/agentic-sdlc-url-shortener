@@ -1,0 +1,75 @@
+{
+  "overview": "A single ASP.NET Core minimal-API project (UrlShortener.Api) with a thin domain layer (ShortLink entity, Base62 code generator, URL/alias validator), EF Core + SQLite persistence, and endpoint groups for links and health. A sibling xUnit project exercises the real HTTP pipeline through WebApplicationFactory against an isolated SQLite file per test class.",
+  "components": [
+    { "name": "Endpoints/LinkEndpoints", "responsibility": "HTTP contract: create/get/delete/redirect and health routes; maps validation failures to problem details." },
+    { "name": "Domain/ShortLink", "responsibility": "Entity: code, original URL, custom-alias flag, created/expires timestamps, IsExpired()." },
+    { "name": "Domain/ShortCodeGenerator", "responsibility": "Stateless cryptographically random Base62 code generation." },
+    { "name": "Domain/UrlValidator", "responsibility": "URL safety rules (scheme, length, credentials, private hosts) and alias rules (pattern, reserved words)." },
+    { "name": "Data/AppDbContext", "responsibility": "EF Core model with a unique index on Code." },
+    { "name": "Contracts/Dtos", "responsibility": "Request/response records decoupled from the entity." },
+    { "name": "UrlShortener.Api.Tests", "responsibility": "Integration tests (ApiFactory) and unit tests for generator and validator." }
+  ],
+  "apiContract": [
+    { "method": "POST", "path": "/api/links", "description": "Create a short link {url, customAlias?, expiresAt?}", "responses": ["201", "400", "409"] },
+    { "method": "GET", "path": "/api/links/{code}", "description": "Link metadata", "responses": ["200", "404"] },
+    { "method": "DELETE", "path": "/api/links/{code}", "description": "Delete a link", "responses": ["204", "404"] },
+    { "method": "GET", "path": "/{code}", "description": "Redirect to original URL", "responses": ["302", "404", "410"] },
+    { "method": "GET", "path": "/health", "description": "Liveness", "responses": ["200"] }
+  ],
+  "dataModel": [
+    { "entity": "ShortLink", "fields": ["Id: long PK", "Code: string(32) unique", "OriginalUrl: string(2048)", "IsCustomAlias: bool", "CreatedAt: DateTimeOffset", "ExpiresAt: DateTimeOffset?"] }
+  ],
+  "decisions": [
+    {
+      "id": "ADR-1",
+      "decision": "Random 7-character Base62 codes with unique-index collision retry instead of a sequential counter encoded in Base62.",
+      "alternatives": ["Auto-increment id encoded as Base62", "Hash of the URL"],
+      "rationale": "Sequential codes are enumerable (anyone can walk every link); hashes make codes deterministic and leak whether a URL was shortened. Random codes with 62^7 space and a bounded retry are simple and safe.",
+      "tradeoffs": "Requires a retry loop on the rare collision; codes carry no ordering information."
+    },
+    {
+      "id": "ADR-2",
+      "decision": "SQLite via EF Core with EnsureCreated() at startup.",
+      "alternatives": ["PostgreSQL via Docker", "In-memory store"],
+      "rationale": "The requirement asks for durable storage and zero-friction local runs; Docker is not guaranteed on reviewer machines. EF Core keeps a migration path to PostgreSQL open.",
+      "tradeoffs": "Single-writer database; EnsureCreated does not evolve schemas - migrations are needed before production."
+    },
+    {
+      "id": "ADR-3",
+      "decision": "302 Found for redirects.",
+      "alternatives": ["301 Moved Permanently", "307 Temporary Redirect"],
+      "rationale": "Browsers cache 301 aggressively, which would make expiry and future click analytics unreliable.",
+      "tradeoffs": "Every visit hits the service; acceptable at this scale and mitigable with caching later."
+    },
+    {
+      "id": "ADR-4",
+      "decision": "Block loopback and private-network destinations by default.",
+      "alternatives": ["Accept any host"],
+      "rationale": "A public redirector that accepts internal hosts becomes an SSRF/phishing helper; an opt-out setting exists for internal deployments.",
+      "tradeoffs": "Local testing against localhost targets requires flipping a setting."
+    }
+  ],
+  "filePlan": [
+    { "path": "UrlShortener.Api/UrlShortener.Api.csproj", "purpose": "Web SDK project, EF Core SQLite + OpenAPI packages, warnings as errors." },
+    { "path": "UrlShortener.Api/Program.cs", "purpose": "Composition root: DI, EnsureCreated, middleware, endpoint mapping; partial Program for tests." },
+    { "path": "UrlShortener.Api/Domain/ShortLink.cs", "purpose": "Entity." },
+    { "path": "UrlShortener.Api/Domain/ShortCodeGenerator.cs", "purpose": "Base62 generator." },
+    { "path": "UrlShortener.Api/Domain/UrlValidator.cs", "purpose": "URL and alias validation + options." },
+    { "path": "UrlShortener.Api/Data/AppDbContext.cs", "purpose": "EF model." },
+    { "path": "UrlShortener.Api/Contracts/Dtos.cs", "purpose": "Request/response records." },
+    { "path": "UrlShortener.Api/Endpoints/LinkEndpoints.cs", "purpose": "Endpoint handlers." },
+    { "path": "UrlShortener.Api/appsettings.json", "purpose": "Connection string and validation options." },
+    { "path": "UrlShortener.Api.Tests/UrlShortener.Api.Tests.csproj", "purpose": "xUnit + Mvc.Testing." },
+    { "path": "UrlShortener.Api.Tests/ApiFactory.cs", "purpose": "WebApplicationFactory with isolated SQLite file." },
+    { "path": "UrlShortener.Api.Tests/LinksApiTests.cs", "purpose": "Integration tests for AC1-AC8." },
+    { "path": "UrlShortener.Api.Tests/DomainTests.cs", "purpose": "Unit tests for generator and validator." }
+  ],
+  "testStrategy": "Integration-first: every acceptance criterion maps to a WebApplicationFactory test hitting the real pipeline (routing, validation, EF, SQLite). Pure logic (code generator, validator) gets fast unit tests. Each test class gets its own SQLite file so classes run in parallel without interference.",
+  "securityConsiderations": [
+    "Reject non-http(s) schemes to prevent javascript:/data: redirects.",
+    "Reject credentials embedded in URLs and private/loopback hosts (SSRF hygiene).",
+    "Cap URL length to bound storage and log sizes.",
+    "Reserved aliases prevent shadowing API routes."
+  ],
+  "externalDependencies": ["Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.AspNetCore.OpenApi", "Microsoft.AspNetCore.Mvc.Testing", "xunit"]
+}

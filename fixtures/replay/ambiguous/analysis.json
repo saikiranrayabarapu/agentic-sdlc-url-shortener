@@ -1,0 +1,24 @@
+{
+  "summary": "The service (v1.1) already has durable storage, validation, async analytics with a bounded queue and a liveness probe. It lacks abuse protection (no rate limiting), has no readiness signal (a dead database still reports healthy), has no request correlation, and relies on EnsureCreated for schema. 'More reliable' could reasonably mean any of: operational resilience, data durability guarantees, availability/multi-instance, or correctness under load - the requirement does not say which.",
+  "architecture": "Program.cs composition root -> Endpoints/LinkEndpoints (HTTP) -> Domain (ShortLink, ClickEvent, generator, validator) -> Analytics (ClickQueue, ClickRecorder hosted service) -> Data/AppDbContext (EF Core SQLite). Tests via ApiFactory per class.",
+  "impactedModules": [
+    { "path": "UrlShortener.Api/Program.cs", "reason": "Where cross-cutting reliability concerns (rate limiter, exception handling, middleware) are registered.", "changeType": "modify" },
+    { "path": "UrlShortener.Api/Endpoints/LinkEndpoints.cs", "reason": "Readiness probe and per-endpoint rate-limit policy attach here.", "changeType": "modify" },
+    { "path": "UrlShortener.Api/appsettings.json", "reason": "New operational settings (limits).", "changeType": "modify" },
+    { "path": "UrlShortener.Api/Infrastructure/", "reason": "New folder for middleware such as correlation ids.", "changeType": "new" },
+    { "path": "UrlShortener.Api/Analytics/ClickRecorder.cs", "reason": "Already drains on shutdown and retries SQLite locks; needs tests/documentation rather than change.", "changeType": "modify" },
+    { "path": "UrlShortener.Api.Tests/", "reason": "New reliability tests; existing suites are the regression gate.", "changeType": "new" }
+  ],
+  "dataFlows": [
+    "POST /api/links -> (rate limiter) -> validation -> SQLite insert",
+    "GET /health/ready -> DbContext.CanConnect -> 200/503",
+    "Any request -> correlation middleware -> handler -> response header X-Correlation-Id"
+  ],
+  "apisAffected": ["POST /api/links (new 429 response)", "GET /health/ready (new)"],
+  "testsAffected": ["All existing tests must stay green; the test factory must raise the rate limit so unrelated tests are not throttled."],
+  "risks": [
+    "Interpreting 'reliable' as availability could pull in multi-instance infrastructure (shared cache, external DB) that the constraints may not allow - must be clarified before design.",
+    "Rate limiting applied to redirects would break legitimate traffic; only link creation should be limited."
+  ],
+  "recommendedApproach": "Stop and clarify the meaning and constraints of 'reliable' with the requester before designing; then implement the chosen scope additively with tests and operability checks."
+}

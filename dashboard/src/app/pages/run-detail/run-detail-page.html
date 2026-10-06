@@ -1,0 +1,464 @@
+<div class="stack">
+  <div class="row small">
+    <a routerLink="/">← Runs</a>
+    <span class="muted">/</span>
+    <span class="mono muted">{{ runId() }}</span>
+  </div>
+
+  @if (loadError(); as e) {
+    <div class="error">{{ e }}</div>
+  }
+
+  @if (!run() && !loadError()) {
+    <div class="empty">Loading run…</div>
+  }
+
+  @if (run(); as r) {
+    <!-- a. Header -->
+    <section class="card">
+      <div class="header-main">
+        <div class="stack-tight">
+          <div class="row">
+            <h1>{{ r.scenario }}</h1>
+            <span [class]="'badge status-' + r.status">{{ r.status }}</span>
+            <span class="badge kind">{{ r.scenarioKind }}</span>
+            <span class="badge kind">mode: {{ r.mode }}</span>
+            @if (r.autoApprove) {
+              <span class="badge kind">auto-approve</span>
+            }
+            @if (r.injectFailureNodeId) {
+              <span class="badge kind">inject failure: {{ r.injectFailureNodeId }}</span>
+            }
+          </div>
+          <div class="small muted">
+            created {{ r.createdAt | date: 'MMM d, HH:mm:ss' }} · updated {{ r.updatedAt | date: 'HH:mm:ss' }}
+            @if (r.completedAt) {
+              · completed {{ r.completedAt | date: 'HH:mm:ss' }}
+            }
+            · polling every {{ isTerminal(r.status) ? '5s' : '2s' }}
+          </div>
+        </div>
+        <div class="row">
+          @if (canStop()) {
+            <button class="danger" (click)="stop()" [disabled]="busy()">Stop</button>
+          }
+          @if (canResume()) {
+            <button class="primary" (click)="resume()" [disabled]="busy()">Resume</button>
+          }
+        </div>
+      </div>
+
+      <p class="requirement">{{ r.requirementText }}</p>
+
+      @if (r.haltReason) {
+        <div class="error"><strong>Halt reason:</strong> {{ r.haltReason }}</div>
+      }
+      @if (r.warnings.length) {
+        <ul class="warnings">
+          @for (w of r.warnings; track $index) {
+            <li>{{ w }}</li>
+          }
+        </ul>
+      }
+      @if (actionError(); as e) {
+        <div class="error">{{ e }}</div>
+      }
+      @if (actionNotice(); as n) {
+        <div class="notice">{{ n }}</div>
+      }
+    </section>
+
+    <!-- c. Pending approvals -->
+    @for (pa of r.pendingApprovals; track pa.id) {
+      <section class="card checkpoint">
+        <div class="card-title">
+          <h2>Approval required: {{ pa.title }}</h2>
+          <span [class]="'badge impact-' + pa.impact">{{ pa.impact }} impact</span>
+        </div>
+        <div class="small muted">
+          node <code>{{ pa.nodeId }}</code> · requested {{ pa.requestedAt | date: 'HH:mm:ss' }}
+          @if (pa.artifactIds.length) {
+            · artifacts: <code>{{ pa.artifactIds.join(', ') }}</code>
+          }
+        </div>
+        <pre class="summary">{{ pa.summary }}</pre>
+        <div class="row form-row">
+          <label class="field">
+            Approver
+            <input type="text" [(ngModel)]="approver" placeholder="your name" />
+          </label>
+          <label class="field grow">
+            Comment
+            <input type="text" class="wide" [(ngModel)]="approvalComment" placeholder="optional" />
+          </label>
+          <button class="ok" (click)="decide(pa, true)" [disabled]="busy()">Approve</button>
+          <button class="danger" (click)="decide(pa, false)" [disabled]="busy()">Reject</button>
+        </div>
+      </section>
+    }
+
+    <!-- d. Clarification -->
+    @if (r.pendingClarification; as pc) {
+      <section class="card checkpoint">
+        <div class="card-title">
+          <h2>Clarification requested</h2>
+          <span class="small muted">node <code>{{ pc.nodeId }}</code> · {{ pc.requestedAt | date: 'HH:mm:ss' }}</span>
+        </div>
+        @for (q of pc.questions; track q.id) {
+          <fieldset class="question">
+            <legend>
+              {{ q.question }}
+              <span [class]="'badge impact-' + q.impact">{{ q.impact }}</span>
+            </legend>
+            @for (opt of q.options; track $index) {
+              <label class="check">
+                <input type="radio" [name]="'q-' + q.id" [value]="opt" [(ngModel)]="clarificationSelection[q.id]" />
+                {{ opt }}
+                @if (opt === q.defaultAssumption) {
+                  <span class="tiny muted">(default assumption)</span>
+                }
+              </label>
+            }
+            <label class="check other">
+              <input type="radio" [name]="'q-' + q.id" [value]="CUSTOM" [(ngModel)]="clarificationSelection[q.id]" />
+              Other:
+              <input
+                type="text"
+                class="grow"
+                [(ngModel)]="clarificationCustom[q.id]"
+                (focus)="clarificationSelection[q.id] = CUSTOM"
+                placeholder="Type your own answer"
+              />
+            </label>
+            @if (!q.options.includes(q.defaultAssumption)) {
+              <div class="tiny muted">Default assumption: {{ q.defaultAssumption }}</div>
+            }
+          </fieldset>
+        }
+        <div class="row form-row">
+          <label class="field">
+            Approver
+            <input type="text" [(ngModel)]="approver" placeholder="your name" />
+          </label>
+          <button class="primary" (click)="submitClarification(pc)" [disabled]="busy()">Submit answers</button>
+        </div>
+      </section>
+    }
+
+    <!-- b. Stage graph -->
+    <section class="card">
+      <div class="card-title">
+        <h2>Stage graph</h2>
+        <span class="tiny muted">
+          {{ r.workflow.name }} · repair cycles {{ r.repairCyclesUsed }}/{{ r.workflow.maxRepairCycles }} · re-plans
+          {{ r.replansUsed }}/{{ r.workflow.maxReplans }}
+        </span>
+      </div>
+      <div class="graph">
+        @for (wave of waves(); track $index; let wi = $index, last = $last) {
+          <div class="wave">
+            <div class="wave-label">wave {{ wi + 1 }}</div>
+            @for (node of wave; track node.id) {
+              @let st = nodeState(r, node.id);
+              @let status = st?.status ?? 'Pending';
+              <div [class]="'stage status-' + status">
+                <div class="stage-head">
+                  <strong>{{ node.name }}</strong>
+                  <span [class]="'badge status-' + status">{{ status }}</span>
+                </div>
+                <div class="stage-meta">
+                  <span class="badge kind">{{ node.kind }}</span>
+                  <span class="mono muted">{{ node.id }}</span>
+                </div>
+                <dl class="stage-facts">
+                  <dt>attempts</dt>
+                  <dd>{{ st?.attempts ?? 0 }} <span class="muted">(max retries {{ node.maxRetries }})</span></dd>
+                  <dt>impact</dt>
+                  <dd>
+                    @if (st?.impact; as imp) {
+                      <span [class]="'badge impact-' + imp">{{ imp }}</span>
+                    } @else {
+                      <span class="muted">—</span>
+                    }
+                  </dd>
+                  <dt>approval</dt>
+                  <dd>
+                    {{ node.approval }}
+                    @if (st?.approvalGranted) {
+                      <span class="granted">· granted</span>
+                    }
+                  </dd>
+                </dl>
+                @if (st?.lastError; as err) {
+                  <div class="stage-error">{{ err }}</div>
+                }
+                <div class="gate tiny muted"><span>entry:</span> {{ node.entryGate }}</div>
+                <div class="gate tiny muted"><span>exit:</span> {{ node.exitGate }}</div>
+                <div class="deps tiny">
+                  @if (node.dependsOn.length) {
+                    depends on: <span class="mono">{{ node.dependsOn.join(', ') }}</span>
+                  } @else {
+                    <span class="muted">no dependencies</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+          @if (!last) {
+            <div class="arrow" aria-hidden="true">→</div>
+          }
+        }
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <!-- e. Decision lineage -->
+      <section class="card">
+        <div class="card-title">
+          <h2>
+            Decision lineage <span class="muted">({{ r.decisions.length }})</span>
+          </h2>
+        </div>
+        @if (!r.decisions.length) {
+          <div class="empty">No decisions yet.</div>
+        } @else {
+          <div class="table-wrap">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Actor</th>
+                  <th>Kind</th>
+                  <th>Node</th>
+                  <th>Rationale</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (d of r.decisions; track d.id) {
+                  <tr>
+                    <td class="mono nowrap">{{ d.at | date: 'HH:mm:ss.SSS' }}</td>
+                    <td class="nowrap">
+                      {{ d.actor }}
+                      @if (d.actorName) {
+                        <span class="muted">· {{ d.actorName }}</span>
+                      }
+                    </td>
+                    <td><span class="badge kind">{{ d.kind }}</span></td>
+                    <td class="mono">{{ d.nodeId }}</td>
+                    <td>
+                      {{ d.rationale }}
+                      @if (d.basedOnArtifactIds.length) {
+                        <div class="tiny muted">based on: {{ d.basedOnArtifactIds.join(', ') }}</div>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      <!-- f. Metrics -->
+      <section class="card">
+        <div class="card-title">
+          <h2>Metrics</h2>
+        </div>
+        @let m = r.metrics;
+        <table class="data kv">
+          <tbody>
+            <tr>
+              <td>Success rate</td>
+              <td>{{ m.successRate | percent: '1.0-1' }}</td>
+            </tr>
+            <tr>
+              <td>Nodes attempted / succeeded / failed</td>
+              <td>{{ m.nodesAttempted }} / {{ m.nodesSucceeded }} / {{ m.nodesFailed }}</td>
+            </tr>
+            <tr>
+              <td>Retries</td>
+              <td>{{ m.retries }}</td>
+            </tr>
+            <tr>
+              <td>Repair cycles</td>
+              <td>{{ m.repairCycles }}</td>
+            </tr>
+            <tr>
+              <td>Rollbacks</td>
+              <td>{{ m.rollbacks }}</td>
+            </tr>
+            <tr>
+              <td>Re-plans</td>
+              <td>{{ m.replans }}</td>
+            </tr>
+            <tr>
+              <td>Fallbacks</td>
+              <td>{{ m.fallbacks }}</td>
+            </tr>
+            <tr>
+              <td>Policy violations</td>
+              <td>{{ m.policyViolations }}</td>
+            </tr>
+            <tr>
+              <td>Approvals granted / requested</td>
+              <td>{{ m.approvalsGranted }} / {{ m.approvalsRequested }}</td>
+            </tr>
+            <tr>
+              <td>MTTR</td>
+              <td>{{ formatMs(m.mttrMs) }}</td>
+            </tr>
+            <tr>
+              <td>End-to-end latency</td>
+              <td>{{ formatMs(m.endToEndLatencyMs) }}</td>
+            </tr>
+            <tr>
+              <td>LLM calls</td>
+              <td>{{ m.llmCalls }}</td>
+            </tr>
+            @for (entry of stageLatency(); track entry[0]) {
+              <tr>
+                <td>
+                  Stage latency · <span class="mono">{{ entry[0] }}</span>
+                </td>
+                <td>{{ formatMs(entry[1]) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- g. Artifacts -->
+    <section class="card">
+      <div class="card-title">
+        <h2>
+          Artifacts <span class="muted">({{ r.artifacts.length }})</span>
+        </h2>
+      </div>
+      @if (!r.artifacts.length) {
+        <div class="empty">No artifacts yet.</div>
+      } @else {
+        <div class="split">
+          <div class="list">
+            @for (group of artifactsByNode(); track group.nodeId) {
+              <div class="group-label mono">{{ group.nodeId }}</div>
+              @for (a of group.artifacts; track a.id) {
+                <button class="link item" [class.selected]="a.id === selectedArtifactId()" (click)="selectArtifact(a.id)">
+                  <span class="row">
+                    <span class="badge kind">{{ a.type }}</span>
+                    <span class="tiny muted">attempt {{ a.attempt }}</span>
+                    @if (a.superseded) {
+                      <span class="tiny superseded">superseded</span>
+                    }
+                  </span>
+                  <span class="tiny muted item-summary">{{ a.summary }}</span>
+                </button>
+              }
+            }
+          </div>
+          <div class="view">
+            @if (selectedArtifact(); as a) {
+              <div class="small muted view-meta">
+                <code>{{ a.id }}</code> · inputs hash <code>{{ a.inputsHash.slice(0, 12) }}…</code> ·
+                {{ a.createdAt | date: 'HH:mm:ss' }}
+              </div>
+              <pre>{{ artifactJson() }}</pre>
+            } @else {
+              <div class="empty">Select an artifact to view its content.</div>
+            }
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- i. Workspace -->
+    <section class="card">
+      <div class="card-title">
+        <h2>
+          Workspace <span class="muted">({{ files().length }} files)</span>
+        </h2>
+        <span class="tiny muted mono">{{ r.workspacePath }}</span>
+      </div>
+      @if (!files().length) {
+        <div class="empty">No files in the workspace yet.</div>
+      } @else {
+        <div class="split">
+          <div class="list">
+            @for (f of files(); track f) {
+              <button class="link item mono" [class.selected]="f === selectedFile()" (click)="openFile(f)">{{ f }}</button>
+            }
+          </div>
+          <div class="view">
+            @if (selectedFile(); as f) {
+              <div class="small muted mono view-meta">{{ f }}</div>
+              @if (fileError(); as e) {
+                <div class="error">{{ e }}</div>
+              } @else {
+                <pre>{{ fileText() ?? 'Loading…' }}</pre>
+              }
+            } @else {
+              <div class="empty">Select a file to view it.</div>
+            }
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- h. Audit log -->
+    <section class="card">
+      <div class="card-title">
+        <h2>
+          Audit log <span class="muted">({{ audit().length }})</span>
+        </h2>
+        <div class="row">
+          @if (verifyResult(); as v) {
+            <span [class]="v.ok ? 'verify ok' : 'verify broken'">
+              {{ v.ok ? 'Chain intact' : 'Chain BROKEN at seq ' + v.brokenAtSeq }} · {{ v.events }} events
+            </span>
+          }
+          <button (click)="verify()" [disabled]="verifying()">{{ verifying() ? 'Verifying…' : 'Verify chain' }}</button>
+        </div>
+      </div>
+      @if (!audit().length) {
+        <div class="empty">No audit events yet.</div>
+      } @else {
+        <div class="table-wrap audit" #auditBox>
+          <table class="data">
+            <thead>
+              <tr>
+                <th class="num">Seq</th>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Actor</th>
+                <th>Node</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (e of audit(); track e.seq) {
+                <tr [class]="'tone-' + auditTone(e.type)">
+                  <td class="num mono">{{ e.seq }}</td>
+                  <td class="mono nowrap">{{ e.timestamp | date: 'HH:mm:ss.SSS' }}</td>
+                  <td><span class="badge kind type">{{ e.type }}</span></td>
+                  <td class="nowrap">
+                    {{ e.actor }}
+                    @if (e.actorName) {
+                      <span class="muted">· {{ e.actorName }}</span>
+                    }
+                  </td>
+                  <td class="mono nowrap">
+                    {{ e.nodeId ?? '' }}
+                    @if (e.attempt) {
+                      <span class="muted">#{{ e.attempt }}</span>
+                    }
+                  </td>
+                  <td>{{ e.message }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>

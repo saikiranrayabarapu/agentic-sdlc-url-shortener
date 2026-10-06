@@ -1,0 +1,9 @@
+{
+  "summary": "Added ReliabilityTests (readiness 200, correlation id echo and generation, problem+json on validation failure) and RateLimitTests with a dedicated factory configured to 3 creates/minute, asserting exactly three 201 and two 429 and that redirects are unaffected. Existing suites are untouched; the shared ApiFactory already raises the limit to 1000.",
+  "impact": "Low",
+  "files": [
+    { "path": "UrlShortener.Api.Tests/ReliabilityTests.cs", "action": "create", "contentFile": "files/UrlShortener.Api.Tests/ReliabilityTests.cs", "reason": "AC1 rate limit, AC2 redirects unthrottled, AC3 readiness, AC4 correlation, AC5 problem details." }
+  ],
+  "risks": ["Fixed-window limiter state is per factory instance; the dedicated factory keeps the assertion deterministic."],
+  "assumptions": ["The shared ApiFactory sets RateLimiting:CreatePerMinute=1000 so unrelated tests never hit 429."]
+}

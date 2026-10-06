@@ -1,0 +1,49 @@
+{
+  "problemStatement": "Extend the existing URL shortener with click analytics: record every redirect (timestamp, referrer, user agent) without adding latency to the redirect, and expose an aggregated statistics endpoint per link, while keeping all existing behaviour and tests intact.",
+  "functionalRequirements": [
+    "FR1: Every successful redirect (302) records a click with UTC timestamp, Referer header and User-Agent header (both optional, truncated to safe lengths).",
+    "FR2: GET /api/links/{code}/stats returns totalClicks, lastClickedAt, clicksPerDay for the last 7 days (oldest first, zero-filled) and the top 5 referrers (direct visits grouped as '(direct)').",
+    "FR3: Stats for an unknown code return 404; stats for a link with no clicks return zeros and empty lists.",
+    "FR4: Deleting a link deletes its click history.",
+    "FR5: Expired (410) and unknown (404) redirects do not record clicks."
+  ],
+  "nonFunctionalRequirements": [
+    "NFR1: Redirect latency must not depend on the analytics write (asynchronous, fire-and-forget into a bounded queue).",
+    "NFR2: Analytics loss under overload is acceptable and must be bounded and observable (drop oldest, count drops); redirect correctness is never sacrificed.",
+    "NFR3: Buffered clicks are flushed on graceful shutdown.",
+    "NFR4: No new external dependencies; SQLite remains the store.",
+    "NFR5: All existing tests continue to pass unchanged."
+  ],
+  "acceptanceCriteria": [
+    "AC1: After 3 redirects with Referer https://news.example.org/post/1 and 1 without, stats show totalClicks=4, topReferrers[0]={https://news.example.org/post/1, 3} and a '(direct)' entry with 1, within 10 seconds.",
+    "AC2: clicksPerDay has exactly 7 entries, sums to totalClicks for today's clicks, and the last entry is today's date (UTC).",
+    "AC3: Stats for a never-clicked link return totalClicks=0, lastClickedAt=null, empty topReferrers.",
+    "AC4: GET /api/links/nope123/stats returns 404.",
+    "AC5: 20 consecutive redirects complete well under 5 seconds total and all 20 clicks are eventually recorded.",
+    "AC6: The full existing test suite (LinksApiTests, DomainTests) passes without modification."
+  ],
+  "assumptions": [
+    "A1: 'Last 7 days' means today plus the six preceding UTC calendar days.",
+    "A2: Referrers are compared as full URLs (no host normalisation) in this iteration.",
+    "A3: Analytics are per link; there is no global dashboard endpoint yet."
+  ],
+  "outOfScope": ["Geo/IP enrichment", "Unique-visitor de-duplication", "Exporting analytics", "Authentication for the stats endpoint"],
+  "ambiguities": [
+    {
+      "id": "Q1",
+      "question": "Should bot/crawler traffic be excluded from analytics?",
+      "options": ["Record everything", "Filter known bot user agents"],
+      "defaultAssumption": "Record everything; filtering can be applied at query time later.",
+      "impact": "Low"
+    },
+    {
+      "id": "Q2",
+      "question": "Is eventual consistency (clicks visible within seconds) acceptable for the stats endpoint?",
+      "options": ["Yes, eventual", "No, synchronous write before redirect"],
+      "defaultAssumption": "Yes - the requirement explicitly prioritises redirect latency.",
+      "impact": "Medium"
+    }
+  ],
+  "riskLevel": "Medium",
+  "needsClarification": false
+}

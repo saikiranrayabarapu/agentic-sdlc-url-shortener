@@ -27,7 +27,7 @@ public static class RepoPaths
             var dir = new DirectoryInfo(start);
             while (dir is not null)
             {
-                if (File.Exists(Path.Combine(dir.FullName, "AgenticSdlc.sln"))) return dir.FullName;
+                if (File.Exists(Path.Combine(dir.FullName, "AgenticSdlc.slnx")) || File.Exists(Path.Combine(dir.FullName, "AgenticSdlc.sln"))) return dir.FullName;
                 dir = dir.Parent;
             }
         }

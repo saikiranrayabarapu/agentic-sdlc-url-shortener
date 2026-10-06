@@ -80,7 +80,11 @@ public sealed class PolicyEngine
 
             // Path containment is enforced by the workspace too; surfacing it here produces an auditable verdict.
             try { workspace.Resolve(path); }
-            catch (InvalidOperationException ex) { result.Findings.Add(new("CMP-002", PolicySeverity.Block, path, ex.Message)); }
+            catch (InvalidOperationException ex)
+            {
+                result.Findings.Add(new("CMP-002", PolicySeverity.Block, path, ex.Message));
+                continue; // nothing else can be evaluated safely for a path outside the sandbox
+            }
 
             if (file.Action.Equals("delete", StringComparison.OrdinalIgnoreCase)) { deletes++; continue; }
             if (workspace.Exists(path)) modifiesExisting = true;

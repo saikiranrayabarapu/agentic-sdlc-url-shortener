@@ -1,0 +1,17 @@
+{
+  "summary": "Added click analytics: ClickEvent entity, bounded ClickQueue, ClickRecorder background writer, enqueue in the redirect handler, stats endpoint and DTOs; registered the queue and hosted service.",
+  "impact": "Medium",
+  "files": [
+    { "path": "UrlShortener.Api/Domain/ClickEvent.cs", "action": "create", "contentFile": "files/UrlShortener.Api/Domain/ClickEvent.cs", "reason": "New entity (ADR-6: UTC DateTime timestamp)." },
+    { "path": "UrlShortener.Api/Analytics/ClickQueue.cs", "action": "create", "contentFile": "files/attempt1/ClickQueue.cs", "reason": "Bounded channel between redirect and writer (ADR-5)." },
+    { "path": "UrlShortener.Api/Analytics/ClickRecorder.cs", "action": "create", "contentFile": "files/UrlShortener.Api/Analytics/ClickRecorder.cs", "reason": "Batch writer with retry and graceful drain." },
+    { "path": "UrlShortener.Api/Data/AppDbContext.cs", "action": "modify", "contentFile": "files/UrlShortener.Api/Data/AppDbContext.cs", "reason": "Clicks DbSet, composite index, cascade FK." },
+    { "path": "UrlShortener.Api/Contracts/Dtos.cs", "action": "modify", "contentFile": "files/UrlShortener.Api/Contracts/Dtos.cs", "reason": "LinkStatsResponse, DailyClicks, ReferrerClicks." },
+    { "path": "UrlShortener.Api/Endpoints/LinkEndpoints.cs", "action": "modify", "contentFile": "files/UrlShortener.Api/Endpoints/LinkEndpoints.cs", "reason": "Enqueue click in RedirectAsync; new GetStatsAsync route." },
+    { "path": "UrlShortener.Api/Program.cs", "action": "modify", "contentFile": "files/UrlShortener.Api/Program.cs", "reason": "Register ClickQueue and ClickRecorder." }
+  ],
+  "risks": [
+    "Existing v1 databases lack the Clicks table because EnsureCreated does not migrate; documented in README/CHANGELOG."
+  ],
+  "assumptions": ["Eventual consistency for stats is acceptable (Q2 default)."]
+}

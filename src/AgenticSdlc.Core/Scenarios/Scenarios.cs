@@ -94,7 +94,9 @@ public static class Planner
         {
             Id = "implementation", Name = "Implementation", Kind = StageKind.Implementation, DependsOn = { "design" },
             MaxRetries = 2,
-            Approval = scenario.Kind == ScenarioKind.Greenfield ? ApprovalRule.IfHighImpact : ApprovalRule.Always,
+            // Brownfield changes to a known code base always need sign-off. Greenfield/ambiguous start risk-based;
+            // the planner tightens this to Always once an ambiguous requirement has been clarified (see ReplanAfterClarification).
+            Approval = scenario.Kind == ScenarioKind.Brownfield ? ApprovalRule.Always : ApprovalRule.IfHighImpact,
             EntryGate = "Design approved; workspace snapshot taken",
             ExitGate = "Policy guardrails pass (secrets, dangerous APIs, dependency allow-list, protected paths); approval if required"
         });

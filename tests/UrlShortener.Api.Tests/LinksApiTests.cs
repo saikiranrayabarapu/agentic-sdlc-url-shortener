@@ -88,12 +88,18 @@ public sealed class LinksApiTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task Expired_link_returns_410()
     {
-        var created = await Create("https://example.com/expiring", expiresAt: DateTimeOffset.UtcNow.AddMilliseconds(300));
-        await Task.Delay(600);
+        // A generous expiry keeps the create request valid under load; we then poll until the link has expired.
+        var created = await Create("https://example.com/expiring", expiresAt: DateTimeOffset.UtcNow.AddSeconds(1.5));
 
-        var response = await _client.GetAsync("/" + created.Code);
+        var deadline = DateTime.UtcNow.AddSeconds(8);
+        HttpStatusCode status;
+        do
+        {
+            await Task.Delay(250);
+            status = (await _client.GetAsync("/" + created.Code)).StatusCode;
+        } while (status != HttpStatusCode.Gone && DateTime.UtcNow < deadline);
 
-        Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Gone, status);
     }
 
     [Fact]

@@ -1,0 +1,41 @@
+{
+  "problemStatement": "The request 'make the URL shortener more reliable' does not define reliability, a target, or constraints. At least three materially different interpretations exist, each leading to a different design and cost. Proceeding without a decision would risk building the wrong thing.",
+  "functionalRequirements": [],
+  "nonFunctionalRequirements": [
+    "Any interpretation must preserve existing behaviour and keep the current test suite green."
+  ],
+  "acceptanceCriteria": [
+    "AC0 (placeholder until clarified): the chosen reliability scope is explicitly documented and each item has an automated check."
+  ],
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguities": [
+    {
+      "id": "Q1",
+      "question": "What does 'reliable' mean for this service?",
+      "options": [
+        "Operational resilience: rate limiting against abuse, readiness/liveness probes, graceful shutdown, consistent error responses, request correlation ids",
+        "Data durability: migrations instead of EnsureCreated, backups, write-ahead logging, synchronous click persistence",
+        "High availability: multiple instances behind a load balancer with a shared store and distributed rate limiting"
+      ],
+      "defaultAssumption": "Operational resilience: rate limiting, health and readiness probes, graceful shutdown, consistent problem responses, correlation ids",
+      "impact": "High"
+    },
+    {
+      "id": "Q2",
+      "question": "May the solution introduce new infrastructure or dependencies (e.g. Redis, PostgreSQL, a message broker)?",
+      "options": ["No - in-process only, SQLite stays, approved packages only", "Yes - external services are acceptable"],
+      "defaultAssumption": "No new external infrastructure; in-process mechanisms and approved Microsoft packages only",
+      "impact": "High"
+    },
+    {
+      "id": "Q3",
+      "question": "Is there a measurable target (availability %, p99 latency, max requests/minute) the change must meet?",
+      "options": ["No explicit target; sensible defaults", "Yes (specify)"],
+      "defaultAssumption": "No explicit SLO; use sensible defaults (30 creates/minute/instance) and make them configurable",
+      "impact": "Medium"
+    }
+  ],
+  "riskLevel": "High",
+  "needsClarification": true
+}

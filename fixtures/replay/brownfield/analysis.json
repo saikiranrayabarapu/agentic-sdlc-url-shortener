@@ -1,0 +1,33 @@
+{
+  "summary": "The existing service is a single minimal-API project with a thin domain layer and EF Core SQLite persistence. Analytics can be added without touching the create/get/delete paths: the redirect handler becomes the only producer of click events, a new ClickEvent entity joins the model, a bounded queue plus background writer decouples persistence from the request, and one new read endpoint aggregates.",
+  "architecture": "Composition root in Program.cs -> Endpoints/LinkEndpoints (HTTP) -> Domain (ShortLink, ShortCodeGenerator, UrlValidator) -> Data/AppDbContext (EF Core, SQLite). Tests boot the real pipeline via ApiFactory (WebApplicationFactory) with one SQLite file per test class.",
+  "impactedModules": [
+    { "path": "UrlShortener.Api/Endpoints/LinkEndpoints.cs", "reason": "RedirectAsync must enqueue a click; a new GetStatsAsync handler and route are needed.", "changeType": "modify" },
+    { "path": "UrlShortener.Api/Data/AppDbContext.cs", "reason": "Add DbSet<ClickEvent>, index on (LinkId, OccurredAtUtc), cascade delete from ShortLink.", "changeType": "modify" },
+    { "path": "UrlShortener.Api/Program.cs", "reason": "Register ClickQueue singleton and ClickRecorder hosted service.", "changeType": "modify" },
+    { "path": "UrlShortener.Api/Contracts/Dtos.cs", "reason": "Add LinkStatsResponse, DailyClicks, ReferrerClicks records.", "changeType": "modify" },
+    { "path": "UrlShortener.Api/Domain/ClickEvent.cs", "reason": "New entity.", "changeType": "new" },
+    { "path": "UrlShortener.Api/Analytics/ClickQueue.cs", "reason": "New bounded channel between redirect and writer.", "changeType": "new" },
+    { "path": "UrlShortener.Api/Analytics/ClickRecorder.cs", "reason": "New BackgroundService that batches writes and drains on shutdown.", "changeType": "new" },
+    { "path": "UrlShortener.Api.Tests/StatsApiTests.cs", "reason": "New integration tests for recording and aggregation.", "changeType": "new" }
+  ],
+  "dataFlows": [
+    "GET /{code} -> AppDbContext.Links lookup -> ClickQueue.TryEnqueue(ClickEvent) -> 302 (unchanged latency profile)",
+    "ClickRecorder (background) -> ClickQueue.Reader -> batch of <=100 -> AppDbContext.Clicks.AddRange -> SaveChanges (retry on SQLite busy)",
+    "GET /api/links/{code}/stats -> Links lookup -> Clicks aggregate (count, max, last-7-days projection) -> LinkStatsResponse",
+    "DELETE /api/links/{code} -> cascade removes ClickEvents (FK with Cascade)"
+  ],
+  "apisAffected": ["GET /{code} (behaviour: records click; contract unchanged)", "GET /api/links/{code}/stats (new)"],
+  "testsAffected": [
+    "LinksApiTests.Redirect_returns_302_to_original_url must still pass (redirect contract unchanged).",
+    "LinksApiTests.Get_metadata_and_delete must still pass (cascade delete).",
+    "New StatsApiTests: async recording, aggregation shape, unknown link 404, redirect latency independent of writes."
+  ],
+  "risks": [
+    "SQLite 'database is locked' under concurrent writers: the background writer must retry with backoff.",
+    "DateTimeOffset columns cannot be compared/aggregated by the SQLite EF provider: ClickEvent must store a UTC DateTime.",
+    "Unbounded queue growth under load: queue must be bounded with an explicit drop policy.",
+    "Schema change (new table) with EnsureCreated: existing databases created by v1.0 will NOT get the new table automatically - migrations or a fresh database are required."
+  ],
+  "recommendedApproach": "Additive change: new entity + two new analytics classes + one new endpoint; modify only the redirect handler, the DbContext, Program registration and the DTO file. Keep every existing test green and verify redirect latency independence with a test."
+}
