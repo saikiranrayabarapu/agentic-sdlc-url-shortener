@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AgenticSdlc.Core/AgenticSdlc.Core.csproj" />
+    <Project Path="src/AgenticSdlc.Host/AgenticSdlc.Host.csproj" />
+    <Project Path="src/UrlShortener.Api/UrlShortener.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AgenticSdlc.Core.Tests/AgenticSdlc.Core.Tests.csproj" />
+    <Project Path="tests/UrlShortener.Api.Tests/UrlShortener.Api.Tests.csproj" />
+  </Folder>
+</Solution>

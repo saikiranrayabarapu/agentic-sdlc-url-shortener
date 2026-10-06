@@ -1,0 +1,14 @@
+<header class="topbar">
+  <a class="brand" routerLink="/">
+    <span class="brand-mark">◆</span>
+    <span>Agentic SDLC</span>
+    <span class="brand-sub">orchestrator</span>
+  </a>
+  <nav class="nav">
+    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Runs</a>
+    <a routerLink="/metrics" routerLinkActive="active">Metrics</a>
+  </nav>
+</header>
+<main class="page">
+  <router-outlet />
+</main>

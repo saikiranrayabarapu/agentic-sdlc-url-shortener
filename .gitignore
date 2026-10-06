@@ -1,0 +1,29 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.db
+*.db-shm
+*.db-wal
+
+# Orchestrator run output (state, audit logs, generated workspaces)
+runs/
+
+# Node / Angular
+node_modules/
+dashboard/dist/
+dashboard/.angular/
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Secrets
+.env
+*.local.json
