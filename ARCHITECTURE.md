@@ -159,6 +159,8 @@ Blocked change sets never touch the workspace; the findings are fed back to the 
 | Safe-stop | `STOP` file / API / Ctrl+C checked between steps; state persisted; `resume <runId>` continues |
 | Staleness gate | A result computed from inputs invalidated mid-flight is discarded and the node re-runs |
 | Time box | `OrchestratorOptions.MaxRunDuration` |
+| Engine errors | An exception inside the engine after an agent returns (persistence, snapshot, apply) halts the run safely (`SafeStop`, node back to `Pending`, resumable) instead of crashing the process |
+| Persistence | `state.json` is written to a temp file and atomically replaced; the replace retries briefly when another process holds the file open (Windows antivirus/indexer collisions) |
 
 ## 4. Observability
 

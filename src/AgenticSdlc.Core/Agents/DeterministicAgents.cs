@@ -167,27 +167,49 @@ public sealed class VerificationAgent : IStageAgent
 /// <summary>
 /// Deterministic operability checks over the workspace. Added to the plan dynamically when a requirement is clarified
 /// to include reliability/operability (demonstrates re-planning), and can be included in any workflow.
+/// Checks run over comment-stripped service sources and look for real registrations (a route actually mapped, a
+/// limiter both registered and enforced, a hosted service that drains on cancellation), not for a keyword that merely
+/// appears somewhere: a mention in a comment or a string is not a probe.
 /// </summary>
 public sealed class OperationalReadinessAgent : IStageAgent
 {
+    // "//" comments, except the "//" inside URL literals such as "https://"; and "/* ... */" blocks.
+    private static readonly Regex LineComment = new(@"(?<!:)//[^\r\n]*", RegexOptions.Compiled);
+    private static readonly Regex BlockComment = new(@"/\*.*?\*/", RegexOptions.Compiled | RegexOptions.Singleline);
+
+    private sealed record Check(string Name, string Evidence, Regex[] AllOf);
+
+    private static Regex Rx(string pattern) => new(pattern, RegexOptions.Compiled);
+
+    /// <summary>Every pattern of a check must match the service sources for the check to pass.</summary>
+    private static readonly Check[] SourceChecks =
+    {
+        new("Liveness health endpoint", "a route is mapped at exactly /health",
+            new[] { Rx(@"\bMap(Get|Methods)\s*\(\s*""/health""") }),
+        new("Readiness probe checks the database", "a route is mapped at /health/ready and the service calls CanConnect",
+            new[] { Rx(@"\bMap(Get|Methods)\s*\(\s*""/health/ready"""), Rx(@"\bCanConnect(Async)?\s*\(") }),
+        new("Rate limiting registered and enforced", "AddRateLimiter registered, UseRateLimiter in the pipeline, an endpoint with RequireRateLimiting",
+            new[] { Rx(@"\bAddRateLimiter\s*\("), Rx(@"\bUseRateLimiter\s*\("), Rx(@"\bRequireRateLimiting\s*\(") }),
+        new("Graceful shutdown handling", "a BackgroundService that handles OperationCanceledException, i.e. drains on shutdown",
+            new[] { Rx(@":\s*BackgroundService\b"), Rx(@"\bcatch\s*\(\s*OperationCanceledException\b") }),
+        new("Structured problem responses", "AddProblemDetails registered and UseExceptionHandler in the pipeline",
+            new[] { Rx(@"\bAddProblemDetails\s*\("), Rx(@"\bUseExceptionHandler\s*\(") }),
+        new("Request correlation id", "an X-Correlation-Id header constant and a correlation middleware in the pipeline",
+            new[] { Rx(@"""X-Correlation-Id"""), Rx(@"\bUseMiddleware<\w*Correlation\w*>") }),
+    };
+
     public StageKind Kind => StageKind.OperationalReadiness;
 
     public Task<StageResult> ExecuteAsync(StageContext ctx, CancellationToken ct)
     {
         var ws = ctx.Workspace;
-        var source = string.Join('\n', ws.ListFiles(".cs").Where(f => !f.Contains("Tests")).Select(f => ws.ReadText(f) ?? ""));
+        var source = StripComments(string.Join('\n', ws.ListFiles(".cs").Where(f => !f.Contains("Tests")).Select(f => ws.ReadText(f) ?? "")));
         var readme = ws.ReadText("README.md") ?? "";
 
-        var checks = new List<(string Name, bool Passed, string Evidence)>
-        {
-            ("Liveness health endpoint", source.Contains("/health"), "Looks for a /health route"),
-            ("Readiness probe checks the database", source.Contains("/health/ready") || source.Contains("CanConnect"), "Looks for /health/ready or a DB connectivity check"),
-            ("Rate limiting configured", source.Contains("AddRateLimiter") || source.Contains("RateLimiter"), "Looks for ASP.NET Core rate limiter registration"),
-            ("Graceful shutdown handling", source.Contains("IHostApplicationLifetime") || source.Contains("StopAsync") || source.Contains("BackgroundService"), "Looks for hosted-service shutdown handling"),
-            ("Structured problem responses", source.Contains("ProblemDetails") || source.Contains("Results.Problem") || source.Contains("ValidationProblem"), "Looks for RFC 7807 problem details usage"),
-            ("Request correlation id", source.Contains("X-Correlation-Id") || source.Contains("TraceIdentifier"), "Looks for correlation id propagation"),
-            ("Run instructions documented", readme.Contains("dotnet run", StringComparison.OrdinalIgnoreCase), "README mentions how to run the service"),
-        };
+        var checks = SourceChecks
+            .Select(c => (Name: c.Name, Passed: c.AllOf.All(rx => rx.IsMatch(source)), Evidence: c.Evidence))
+            .Append((Name: "Run instructions documented", Passed: readme.Contains("dotnet run", StringComparison.OrdinalIgnoreCase), Evidence: "README mentions how to run the service"))
+            .ToList();
 
         var passedCount = checks.Count(c => c.Passed);
         var content = JsonSerializer.SerializeToElement(new
@@ -220,6 +242,9 @@ public sealed class OperationalReadinessAgent : IStageAgent
             Content = content
         });
     }
+
+    /// <summary>Removes // and /* */ comments so that a mention in a comment cannot satisfy a check.</summary>
+    private static string StripComments(string source) => LineComment.Replace(BlockComment.Replace(source, " "), " ");
 }
 
 public sealed class AgentRegistry

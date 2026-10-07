@@ -10,7 +10,7 @@ TestResults/
 *.db-wal
 
 # Orchestrator run output (state, audit logs, generated workspaces)
-runs/
+/runs/
 
 # Node / Angular
 node_modules/

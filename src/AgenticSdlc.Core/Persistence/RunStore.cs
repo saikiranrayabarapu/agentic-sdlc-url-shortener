@@ -35,7 +35,29 @@ public sealed class RunStore
             Directory.CreateDirectory(RunDirectory(state.RunId));
             var tmp = StatePath(state.RunId) + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(state, RunState.JsonOptions));
-            File.Move(tmp, StatePath(state.RunId), overwrite: true);
+            ReplaceWithRetry(tmp, StatePath(state.RunId));
+        }
+    }
+
+    /// <summary>
+    /// Atomic replace with a short, bounded retry. On Windows, <c>File.Move(overwrite: true)</c> fails with "access denied"
+    /// while another process (antivirus, search indexer, a reader of state.json) briefly holds the destination open. The
+    /// window is milliseconds, so a few retries make saves reliable without masking a real permission problem.
+    /// </summary>
+    private static void ReplaceWithRetry(string source, string destination)
+    {
+        const int maxAttempts = 6;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(source, destination, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < maxAttempts)
+            {
+                Thread.Sleep(20 * attempt);
+            }
         }
     }
 

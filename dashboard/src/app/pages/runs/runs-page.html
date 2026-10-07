@@ -1,0 +1,151 @@
+<div class="stack">
+  <!-- Start a run -->
+  <section class="card">
+    <div class="card-title">
+      <h1>Start a run <span class="muted small">agents propose, gates decide, you approve</span></h1>
+    </div>
+
+    @if (catalogError(); as e) {
+      <div class="error">{{ e }}</div>
+    }
+
+    <form class="start-form" (ngSubmit)="start()">
+      <label class="field">
+        Scenario
+        <select name="scenario" [(ngModel)]="scenarioId" required>
+          @for (s of scenarios(); track s.id) {
+            <option [value]="s.id">{{ s.title }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        Model mode
+        <select name="mode" [(ngModel)]="mode">
+          @for (m of modes(); track m) {
+            <option [value]="m">{{ m }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        Inject failure
+        <select name="injectFailure" [(ngModel)]="injectFailure">
+          <option value="">none</option>
+          @for (n of selectedScenario()?.workflow ?? []; track n.id) {
+            <option [value]="n.id">{{ n.id }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="check">
+        <input type="checkbox" name="autoApprove" [(ngModel)]="autoApprove" />
+        auto-approve <span class="muted">(audited as automated)</span>
+      </label>
+
+      @if (mode !== 'replay') {
+        <label class="check">
+          <input type="checkbox" name="record" [(ngModel)]="record" />
+          record responses as replay fixtures
+        </label>
+      }
+
+      <button type="submit" class="primary" [disabled]="starting() || !scenarioId">
+        {{ starting() ? 'Starting…' : 'Start run' }}
+      </button>
+    </form>
+
+    @if (selectedScenario(); as s) {
+      <p class="requirement">
+        <span class="badge kind">{{ s.kind }}</span>
+        {{ s.requirement }}
+      </p>
+      <p class="tiny muted demonstrates">{{ s.whatItDemonstrates }}</p>
+    }
+
+    @if (startError(); as e) {
+      <div class="error">{{ e }}</div>
+    }
+  </section>
+
+  <!-- Runs -->
+  <section class="card">
+    <div class="card-title">
+      <h2>Runs <span class="muted small">newest first · refreshes every 3s</span></h2>
+      <button (click)="refresh()" [disabled]="loading()">Refresh</button>
+    </div>
+
+    @if (error(); as e) {
+      <div class="error">{{ e }}</div>
+    }
+    @if (notice(); as n) {
+      <div class="notice">{{ n }}</div>
+    }
+
+    @if (!runs().length) {
+      @if (!error()) {
+        <div class="empty">No runs yet. Start one above, or from the CLI: dotnet run --project src/AgenticSdlc.Host -- run greenfield --auto-approve</div>
+      }
+    } @else {
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Scenario</th>
+              <th>Status</th>
+              <th>Waiting on</th>
+              <th class="num">Stages</th>
+              <th class="num">Retries / repairs / rollbacks</th>
+              <th class="num">End-to-end</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of runs(); track r.runId) {
+              <tr>
+                <td>
+                  <a class="mono" [routerLink]="['/runs', r.runId]">{{ r.runId }}</a>
+                  @if (r.haltReason) {
+                    <div class="tiny muted halt">{{ r.haltReason }}</div>
+                  }
+                </td>
+                <td class="nowrap">
+                  {{ r.scenario }}
+                  <span class="badge kind">{{ r.mode }}</span>
+                  @if (r.autoApprove) {
+                    <span class="badge kind">auto</span>
+                  }
+                </td>
+                <td><span [class]="'badge status-' + r.status">{{ r.status }}</span></td>
+                <td>
+                  @if (r.pendingClarification) {
+                    <span class="badge status-AwaitingClarification">clarification</span>
+                  } @else if (r.pendingApprovals) {
+                    <span class="badge status-AwaitingApproval">{{ r.pendingApprovals }} approval(s)</span>
+                  } @else {
+                    <span class="muted">none</span>
+                  }
+                </td>
+                <td class="num">{{ succeeded(r) }} / {{ r.nodes.length }}</td>
+                <td class="num">{{ r.metrics.retries }} / {{ r.metrics.repairCycles }} / {{ r.metrics.rollbacks }}</td>
+                <td class="num">{{ formatMs(r.metrics.endToEndLatencyMs) }}</td>
+                <td class="nowrap">{{ r.createdAt | date: 'MMM d, HH:mm:ss' }}</td>
+                <td class="nowrap actions">
+                  @if (canStop(r)) {
+                    <button class="danger" (click)="stop(r)" [disabled]="busyId() === r.runId">Stop</button>
+                  }
+                  @if (canResume(r)) {
+                    <button (click)="resume(r)" [disabled]="busyId() === r.runId">Resume</button>
+                  }
+                  <a [routerLink]="['/runs', r.runId]">Open</a>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>

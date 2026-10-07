@@ -173,6 +173,14 @@ public sealed class Orchestrator
                 {
                     await gate.WaitAsync(ct);
                     try { await ExecuteNodeAsync(run, node, workspace, audit, ct); }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex)
+                    {
+                        // An engine-side failure after the agent returned (persistence, snapshot, apply). It must never take
+                        // the process down with the run stuck in Running: record it and halt safely so `resume` can continue.
+                        audit.Append(run.RunId, AuditTypes.Warning, Actor.System, $"Engine error in '{node.Id}': {ex.GetType().Name}: {ex.Message}", node.Id);
+                        Halt(run, audit, $"Engine error in '{node.Id}': {ex.Message}", "SafeStop");
+                    }
                     finally { gate.Release(); }
                 }, ct)).ToList();
                 await Task.WhenAll(tasks);

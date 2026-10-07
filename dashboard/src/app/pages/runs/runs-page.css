@@ -1,0 +1,35 @@
+h1 .small {
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.start-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.start-form select {
+  min-width: 200px;
+}
+
+.requirement {
+  margin: 12px 0 0;
+}
+
+.demonstrates {
+  margin: 4px 0 0;
+}
+
+.halt {
+  max-width: 380px;
+  white-space: normal;
+  margin-top: 2px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
