@@ -12,7 +12,13 @@ public sealed class UrlValidationOptions
 
 public static class UrlValidator
 {
-    private static readonly Regex AliasRx = new("^[A-Za-z0-9_-]{4,32}$", RegexOptions.Compiled);
+    /// <summary>Alphabet and length shared by generated codes and custom aliases. Single source of truth for the redirect route too.</summary>
+    public const string CodePattern = "^[A-Za-z0-9_-]{4,32}$";
+
+    /// <summary>Same pattern with braces doubled, as ASP.NET Core route templates require inside a regex(...) constraint.</summary>
+    public static readonly string CodeRoutePattern = CodePattern.Replace("{", "{{").Replace("}", "}}");
+
+    private static readonly Regex AliasRx = new(CodePattern, RegexOptions.Compiled);
     private static readonly HashSet<string> ReservedAliases = new(StringComparer.OrdinalIgnoreCase) { "api", "health", "openapi", "swagger", "admin" };
 
     public static bool TryValidateUrl(string? input, UrlValidationOptions options, out Uri? uri, out string? error)

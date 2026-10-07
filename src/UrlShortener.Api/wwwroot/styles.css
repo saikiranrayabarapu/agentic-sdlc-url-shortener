@@ -1,0 +1,189 @@
+/* URL Shortener web UI. No framework, no build step. */
+:root {
+  --bg: #f3f5f7;
+  --card: #ffffff;
+  --text: #1b2733;
+  --muted: #5b6b7b;
+  --line: #dfe5ec;
+  --primary: #0e8f82;
+  --primary-dark: #0b6f66;
+  --primary-tint: #eaf6f4;
+  --danger: #b23b3b;
+  --danger-tint: #fbecec;
+  --navy: #0f2b46;
+  --radius: 12px;
+  --shadow: 0 6px 24px rgba(16, 32, 48, 0.08);
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- header ---- */
+.topbar {
+  background: var(--navy);
+  color: #fff;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand { color: #fff; text-decoration: none; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.2px; }
+
+.topbar nav a { color: #cfe1f3; text-decoration: none; margin-left: 18px; font-size: 0.95rem; }
+.topbar nav a:hover, .topbar nav a:focus { color: #fff; text-decoration: underline; }
+
+/* ---- layout ---- */
+main {
+  width: min(880px, 100% - 32px);
+  margin: 32px auto;
+  display: grid;
+  gap: 24px;
+  flex: 1;
+}
+
+.card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px; }
+
+.hero h1 { margin: 0 0 6px; font-size: 1.9rem; }
+.lede { margin: 0 0 20px; color: var(--muted); }
+
+/* ---- form ---- */
+label { display: block; font-weight: 600; margin-bottom: 6px; }
+
+input[type="url"], input[type="text"], input[type="datetime-local"] {
+  width: 100%;
+  font: inherit;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+}
+
+input:focus { outline: 3px solid rgba(14, 143, 130, 0.3); border-color: var(--primary); }
+
+#url { font-size: 1.05rem; }
+
+.options-grid { display: grid; gap: 16px; margin-top: 16px; }
+@media (min-width: 640px) { .options-grid { grid-template-columns: 1fr 1fr; } }
+
+.alias-row { display: flex; align-items: stretch; }
+.prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: #f7f9fb;
+  color: var(--muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.alias-row input { border-radius: 0 8px 8px 0; }
+
+.hint { margin: 6px 0 0; color: var(--muted); font-size: 0.85rem; }
+.muted { color: var(--muted); }
+.break { word-break: break-all; }
+
+.field-error, .form-error { color: var(--danger); font-size: 0.9rem; margin: 6px 0 0; }
+.field-error:empty, .form-error:empty { display: none; }
+
+.primary {
+  font: inherit;
+  font-weight: 600;
+  background: var(--primary);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 22px;
+  cursor: pointer;
+}
+.primary:hover, .primary:focus { background: var(--primary-dark); }
+.primary:disabled { opacity: 0.6; cursor: progress; }
+
+#shorten-btn { margin-top: 18px; width: 100%; font-size: 1.05rem; }
+@media (min-width: 640px) { #shorten-btn { width: auto; } }
+
+/* ---- result ---- */
+.result { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.result h2 { margin: 0 0 10px; font-size: 1.2rem; }
+.result-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.result-row input { flex: 1 1 260px; font-size: 1.05rem; }
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 18px;
+  border: 1px solid var(--primary);
+  color: var(--primary-dark);
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.button:hover, .button:focus { background: var(--primary-tint); }
+
+.link-button {
+  font: inherit;
+  font-weight: 600;
+  background: none;
+  border: 0;
+  color: var(--primary-dark);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.link-button:hover, .link-button:focus { background: var(--primary-tint); text-decoration: underline; }
+.link-button:disabled { cursor: default; text-decoration: none; }
+.link-button.danger { color: var(--danger); }
+.link-button.danger:hover, .link-button.danger:focus { background: var(--danger-tint); }
+
+/* ---- recent links ---- */
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.section-head h2 { margin: 0; font-size: 1.3rem; }
+
+.recent { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 12px; }
+.recent-item { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.recent-item.missing { opacity: 0.65; }
+
+.recent-main { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.recent-main .short { font-weight: 700; color: var(--primary-dark); text-decoration: none; word-break: break-all; }
+.recent-main .short:hover, .recent-main .short:focus { text-decoration: underline; }
+
+.clicks {
+  font-size: 0.9rem;
+  color: var(--muted);
+  background: #f1f4f7;
+  padding: 2px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.original { color: var(--muted); font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 4px; }
+.meta { color: var(--muted); font-size: 0.82rem; margin-top: 2px; }
+.actions { margin-top: 8px; display: flex; gap: 4px; flex-wrap: wrap; }
+
+.stats-panel { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.stats-summary { margin: 0 0 8px; font-weight: 600; }
+.stats-table { border-collapse: collapse; font-size: 0.9rem; }
+.stats-table caption { text-align: left; color: var(--muted); font-size: 0.85rem; margin-bottom: 4px; }
+.stats-table td { padding: 2px 14px 2px 0; }
+.stats-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.stats-heading { margin: 10px 0 4px; font-weight: 600; }
+.referrers { margin: 0; padding-left: 18px; font-size: 0.9rem; word-break: break-all; }
+
+footer { text-align: center; padding: 18px; font-size: 0.85rem; }

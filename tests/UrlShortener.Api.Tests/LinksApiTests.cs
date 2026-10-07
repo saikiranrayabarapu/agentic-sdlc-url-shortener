@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using UrlShortener.Api.Contracts;
+using UrlShortener.Api.Domain;
 
 namespace UrlShortener.Api.Tests;
 
@@ -112,19 +113,28 @@ public sealed class LinksApiTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task Get_metadata_and_delete()
     {
-        var created = await Create("https://example.com/meta");
+        var create = await _client.PostAsJsonAsync("/api/links", new CreateLinkRequest("https://example.com/meta"));
+        var created = (await create.Content.ReadFromJsonAsync<CreatedLinkResponse>())!;
 
         var get = await _client.GetAsync($"/api/links/{created.Code}");
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
 
-        var delete = await _client.DeleteAsync($"/api/links/{created.Code}");
+        // Deleting needs the manage token issued at creation (ownership is covered in depth by OwnershipTests).
+        var delete = await DeleteWithToken(created.Code, created.ManageToken);
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
 
         var afterDelete = await _client.GetAsync($"/api/links/{created.Code}");
         Assert.Equal(HttpStatusCode.NotFound, afterDelete.StatusCode);
 
-        var deleteAgain = await _client.DeleteAsync($"/api/links/{created.Code}");
+        var deleteAgain = await DeleteWithToken(created.Code, created.ManageToken);
         Assert.Equal(HttpStatusCode.NotFound, deleteAgain.StatusCode);
+    }
+
+    private async Task<HttpResponseMessage> DeleteWithToken(string code, string token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/links/{code}");
+        request.Headers.Add(ManageToken.HeaderName, token);
+        return await _client.SendAsync(request);
     }
 
     [Fact]

@@ -10,10 +10,10 @@ and reliability features. Three scenarios exercise the engine: **greenfield**, *
 
 | | |
 |---|---|
-| Engine, agents, policy, audit, metrics | `src/AgenticSdlc.Core` · 33 tests |
+| Engine, agents, policy, audit, metrics | `src/AgenticSdlc.Core` · 37 tests |
 | CLI + HTTP API host | `src/AgenticSdlc.Host` |
 | Angular dashboard (approvals, stage graph, audit, metrics) | `dashboard/` |
-| URL shortener (the product) | `src/UrlShortener.Api` · 49 tests |
+| URL shortener (the product: API + web UI) | `src/UrlShortener.Api` · 62 tests |
 | Architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Scenarios | [greenfield](docs/scenarios/01-greenfield.md) · [brownfield](docs/scenarios/02-brownfield.md) · [ambiguous](docs/scenarios/03-ambiguous.md) |
 | Testing approach, limitations, trade-offs | [docs/TESTING.md](docs/TESTING.md) · [docs/ENGINEERING_SUMMARY.md](docs/ENGINEERING_SUMMARY.md) |
@@ -60,6 +60,20 @@ proxies `/api` to the host.
 
 ```bash
 dotnet run --project src/UrlShortener.Api --urls http://localhost:5000
+```
+
+Open <http://localhost:5000> for the web UI (TinyURL-style): paste a long link, optionally pick a custom alias and an
+expiry, and get a short link with a copy button. The page keeps a per-browser list of your recent links with click
+counts, clicks per day and top referrers. Deleting a link requires the manage token returned once at creation; the
+page keeps it with the recent-links entry, so only the browser that created a link can delete it (there are no
+accounts). Links are persisted in SQLite (`src/UrlShortener.Api/urlshortener.db`) and
+survive restarts; the recent list is `localStorage` only, because the API deliberately has no "list every link"
+endpoint. To share a link with people outside your machine, bind to all interfaces (`--urls http://0.0.0.0:5000`) or
+forward the port (for example VS Code port forwarding); the server must stay running for the links to resolve.
+
+The same API works without the UI:
+
+```bash
 curl -X POST localhost:5000/api/links -H "Content-Type: application/json" -d "{\"url\":\"https://example.com/a/very/long/path\"}"
 curl -i localhost:5000/<code>                 # 302
 curl localhost:5000/api/links/<code>/stats    # analytics
@@ -132,7 +146,7 @@ Environment: `AGENTIC_RUNS` (default `./runs`), `AGENTIC_FIXTURES` (default `./f
 ```
 src/AgenticSdlc.Core/        Model · Engine · Scenarios(Planner) · Agents · Policy · Approvals · Observability · Persistence · Workspace · Llm
 src/AgenticSdlc.Host/        Program.cs (CLI + API) · Infrastructure.cs (RunManager, metrics aggregation, paths)
-src/UrlShortener.Api/        the product: Program, Endpoints, Domain, Data, Analytics, Infrastructure, Contracts
+src/UrlShortener.Api/        the product: Program, Endpoints, Domain, Data, Analytics, Infrastructure, Contracts, wwwroot (web UI)
 tests/AgenticSdlc.Core.Tests, tests/UrlShortener.Api.Tests
 fixtures/replay/<scenario>/  recorded agent outputs + files/ referenced by them
 dashboard/                   Angular 22 UI
@@ -146,7 +160,7 @@ runs/                        (generated, git-ignored) state.json · audit.jsonl 
 Replay is the default for reproducibility; live modes are available but not covered by automated tests. The policy
 engine is pattern-based change control, not SAST. Approvals are audited, not cryptographically signed. Rollback is a
 directory snapshot. The shortener uses SQLite with `EnsureCreated` for zero-step local runs; migrations and PostgreSQL
-are the documented production path; rate limiting is per instance. Full discussion in
+are the documented production path; rate limiting is per client address but in-memory per instance. Full discussion in
 [docs/ENGINEERING_SUMMARY.md](docs/ENGINEERING_SUMMARY.md).
 
 ## Setup troubleshooting

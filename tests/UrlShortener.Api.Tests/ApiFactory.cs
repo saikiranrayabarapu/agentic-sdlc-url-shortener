@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace UrlShortener.Api.Tests;
 
@@ -24,6 +25,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("RateLimiting:CreatePerMinute", "1000");
         builder.UseSetting("UrlValidation:BlockPrivateHosts", "true");
         foreach (var kv in _settings) builder.UseSetting(kv.Key, kv.Value);
+        // Lets a test pick the client address per request, so per-client behaviour (rate limiting) is observable.
+        builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestClientIpStartupFilter>());
     }
 
     protected override void Dispose(bool disposing)

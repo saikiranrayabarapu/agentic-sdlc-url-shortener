@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>URL Shortener</title>
+  <meta name="description" content="Shorten a long link, share it, and see how many times it was clicked.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e8f82'/%3E%3Cpath d='M12 20l8-8M13 11h-2a4 4 0 0 0 0 8h2M19 13h2a4 4 0 0 1 0 8h-2' stroke='%23fff' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">URL Shortener</a>
+    <nav aria-label="Secondary">
+      <a href="/openapi/v1.json">API</a>
+      <a href="/health">Health</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card hero" aria-labelledby="hero-title">
+      <h1 id="hero-title">Shorten a long link</h1>
+      <p class="lede">Paste any http or https link. You get a short link to share, and every click on it is counted.</p>
+
+      <form id="shorten-form" novalidate>
+        <label for="url">Enter a long link here</label>
+        <input id="url" name="url" type="url" inputmode="url" placeholder="https://example.com/a/very/long/path?with=parameters" autocomplete="off" spellcheck="false" required>
+        <p class="field-error" id="url-error" role="alert"></p>
+
+        <div class="options-grid">
+          <div>
+            <label for="alias">Customize your link <span class="muted">(optional)</span></label>
+            <div class="alias-row">
+              <span class="prefix" id="alias-prefix">/</span>
+              <input id="alias" name="alias" type="text" placeholder="my-link" maxlength="32" autocomplete="off" spellcheck="false">
+            </div>
+            <p class="hint">4 to 32 letters, digits, '-' or '_'. Leave empty for a random code.</p>
+            <p class="field-error" id="alias-error" role="alert"></p>
+          </div>
+          <div>
+            <label for="expires">Expires at <span class="muted">(optional)</span></label>
+            <input id="expires" name="expires" type="datetime-local">
+            <p class="hint">Leave empty for a link that never expires.</p>
+            <p class="field-error" id="expires-error" role="alert"></p>
+          </div>
+        </div>
+
+        <button type="submit" id="shorten-btn" class="primary">Shorten URL</button>
+        <p class="form-error" id="form-error" role="alert"></p>
+      </form>
+
+      <section class="result" id="result" hidden aria-live="polite" aria-labelledby="result-title">
+        <h2 id="result-title">Your short link is ready</h2>
+        <div class="result-row">
+          <input id="short-url" type="text" readonly aria-label="Short link">
+          <button type="button" id="copy-btn" class="primary">Copy</button>
+          <a id="open-link" class="button" href="#" target="_blank" rel="noopener">Open</a>
+        </div>
+        <p class="muted">Points to <span id="result-original" class="break"></span></p>
+        <button type="button" id="another-btn" class="link-button">Shorten another link</button>
+      </section>
+    </section>
+
+    <section class="card" aria-labelledby="recent-title">
+      <div class="section-head">
+        <h2 id="recent-title">Your recent links</h2>
+        <button type="button" id="refresh-btn" class="link-button">Refresh click counts</button>
+      </div>
+      <p class="muted">This list is kept in your browser, together with the manage token that allows deleting each link. The links themselves are stored on the server and keep working from any device.</p>
+      <p id="empty-recent" class="muted">No links yet. Shorten one above.</p>
+      <ul id="recent" class="recent" aria-live="polite"></ul>
+    </section>
+  </main>
+
+  <template id="recent-item">
+    <li class="recent-item">
+      <div class="recent-main">
+        <a class="short" target="_blank" rel="noopener"></a>
+        <span class="clicks"></span>
+      </div>
+      <div class="original"></div>
+      <div class="meta"></div>
+      <div class="actions">
+        <button type="button" class="link-button copy">Copy</button>
+        <button type="button" class="link-button stats">Stats</button>
+        <button type="button" class="link-button danger delete">Delete</button>
+      </div>
+      <div class="stats-panel" hidden></div>
+    </li>
+  </template>
+
+  <footer class="muted">Links are persisted in SQLite on the server. Click counts are recorded asynchronously and may lag by a moment.</footer>
+  <script src="/app.js"></script>
+</body>
+</html>

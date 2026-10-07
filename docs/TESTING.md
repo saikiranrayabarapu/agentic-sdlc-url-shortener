@@ -3,7 +3,7 @@
 Two different things are under test: the **orchestrator** (does the governance machinery behave?) and the **product**
 it builds (does the URL shortener work?). They are tested differently.
 
-## 1. Orchestrator - `tests/AgenticSdlc.Core.Tests` (33 tests, ~5 s)
+## 1. Orchestrator - `tests/AgenticSdlc.Core.Tests` (37 tests, ~10 s)
 
 No model, no toolchain: agents are replaced by `ScriptedAgent`s that return scripted `StageResult`s, so each
 governance path is exercised deterministically.
@@ -28,8 +28,11 @@ governance path is exercised deterministically.
 | Audit log | hash chain verifies; tampering one line is detected at the right sequence; reopening continues the chain |
 | Workspace | path containment (`..`, absolute paths); snapshot/restore round trip |
 | LLM plumbing | JSON extraction from fenced/chatty text; replay fixture resolution and `contentFile` expansion; fallback to replay when live is unavailable |
+| Persistence robustness | `Save` succeeds while another handle briefly holds `state.json` open (the Windows "access denied" collision that once crashed a rollback demo) |
+| Engine errors | an exception thrown inside the engine after the agent returned (an unknown file action makes the apply step throw) ends in `Halted` with a `SafeStop` audit event and the node back to `Pending`, never a crash |
+| Operational readiness | real route, limiter, problem-details, correlation and hosted-service registrations pass all 7 checks; the same source with every line commented out fails, and the feedback names each missing feature |
 
-## 2. URL shortener - `tests/UrlShortener.Api.Tests` (49 tests, ~5 s)
+## 2. URL shortener - `tests/UrlShortener.Api.Tests` (62 tests, ~6 s)
 
 Integration-first through `WebApplicationFactory<Program>`; every test class owns an isolated SQLite file, so classes
 run in parallel.
@@ -40,7 +43,10 @@ run in parallel.
 | `DomainTests` | Base62 generator (alphabet, length, uniqueness over 2000, range checks); URL validator accept/reject matrix incl. private IPv4/IPv6, credentials, length; alias rules |
 | `StatsApiTests` | asynchronous click recording with referrer grouping, 7-day buckets, zero state, unknown 404, 20 redirects stay fast and all land |
 | `ReliabilityTests` | readiness 200, correlation echo and generation, problem+json on validation failure |
-| `RateLimitTests` | own factory with limit 3 → exactly 3×201 and 2×429; redirects unaffected |
+| `RateLimitTests` | own factory with limit 3 → exactly 3×201 and 2×429 for one client; redirects unaffected |
+| `PerClientRateLimitTests` | one client exhausting its budget (2×201 then 429) does not block another client's 201; client addresses are injected per request through a test-only startup filter |
+| `OwnershipTests` | create returns a manage token once and never on GET; delete without a token or with a wrong one is 403 and leaves the link intact; the right token deletes exactly once; unknown codes stay 404 |
+| `UiTests` | the web UI is static content served by the API: `/` is HTML containing the form, `/app.js` and `/styles.css` carry the right content types, asset-like or too-short paths (`/favicon.ico`, `/missing.txt`, `/abc`) are 404 without reaching the redirect route, and created links (alias and generated) still 302 alongside the static site |
 
 Flakiness policy: tests that depend on time (expiry, async writer) poll with a bounded deadline rather than sleeping a
 fixed amount. The verification gate in an early orchestrated run caught the original fixed-sleep version failing
@@ -67,9 +73,13 @@ README quick start) checks:
 - HTTP API: start a run, answer the clarification, approve implementation and release, verify the audit chain, read
   aggregated metrics (see `docs/scenarios/03-ambiguous.md`).
 - Dashboard production build served by the host at `http://localhost:5080`.
+- Shortener web UI: against a running service, the page and assets load, a link created with a custom alias redirects
+  with 302, and its stats report the click. The page script is syntax-checked with `node --check`.
 
 ## 5. What is not tested (known gaps)
 
+- The shortener web UI's JavaScript has no browser-automation tests; the server-side contract it relies on is pinned by
+  `UiTests` and the page was exercised manually.
 - Live model modes (`anthropic`, `claude-cli`) have no automated tests; they share all agent/engine code with replay and
   were exercised manually only for connectivity.
 - The Angular dashboard has no unit or end-to-end tests; it is verified by a strict production build and manual use.

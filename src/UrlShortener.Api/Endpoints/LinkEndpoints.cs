@@ -38,7 +38,8 @@ public static class LinkEndpoints
         group.MapDelete("/{code}", DeleteAsync).WithName("DeleteLink");
         group.MapGet("/{code}/stats", GetStatsAsync).WithName("GetLinkStats");
 
-        app.MapGet("/{code}", RedirectAsync).WithName("Redirect");
+        // Constrained to the short-code alphabet so static assets and junk paths never reach the database.
+        app.MapGet("/{code:regex(" + UrlValidator.CodeRoutePattern + ")}", RedirectAsync).WithName("Redirect");
         return app;
     }
 
@@ -52,12 +53,16 @@ public static class LinkEndpoints
         if (request.ExpiresAt is { } exp && exp <= DateTimeOffset.UtcNow) errors["expiresAt"] = new[] { "expiresAt must be in the future." };
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
+        // One secret per link, returned exactly once: the only thing that authorises deleting the link later.
+        var token = ManageToken.Generate();
+        var tokenHash = ManageToken.Hash(token);
+
         if (request.CustomAlias is not null)
         {
             if (await db.Links.AnyAsync(l => l.Code == request.CustomAlias, ct))
                 return Results.Problem($"Alias '{request.CustomAlias}' is already taken.", statusCode: StatusCodes.Status409Conflict);
 
-            var custom = new ShortLink { Code = request.CustomAlias, OriginalUrl = uri!.ToString(), IsCustomAlias = true, ExpiresAt = request.ExpiresAt };
+            var custom = new ShortLink { Code = request.CustomAlias, OriginalUrl = uri!.ToString(), IsCustomAlias = true, ExpiresAt = request.ExpiresAt, ManageTokenHash = tokenHash };
             db.Links.Add(custom);
             try
             {
@@ -67,18 +72,18 @@ public static class LinkEndpoints
             {
                 return Results.Problem($"Alias '{request.CustomAlias}' is already taken.", statusCode: StatusCodes.Status409Conflict);
             }
-            return Results.Created($"/api/links/{custom.Code}", ToResponse(custom, http));
+            return Results.Created($"/api/links/{custom.Code}", ToCreatedResponse(custom, http, token));
         }
 
         // Random code with bounded collision retry. Unique index is the source of truth.
         for (var attempt = 0; attempt < MaxCodeCollisionRetries; attempt++)
         {
-            var link = new ShortLink { Code = generator.Generate(), OriginalUrl = uri!.ToString(), ExpiresAt = request.ExpiresAt };
+            var link = new ShortLink { Code = generator.Generate(), OriginalUrl = uri!.ToString(), ExpiresAt = request.ExpiresAt, ManageTokenHash = tokenHash };
             db.Links.Add(link);
             try
             {
                 await db.SaveChangesAsync(ct);
-                return Results.Created($"/api/links/{link.Code}", ToResponse(link, http));
+                return Results.Created($"/api/links/{link.Code}", ToCreatedResponse(link, http, token));
             }
             catch (DbUpdateException)
             {
@@ -94,10 +99,22 @@ public static class LinkEndpoints
         return link is null ? Results.NotFound() : Results.Ok(ToResponse(link, http));
     }
 
-    private static async Task<IResult> DeleteAsync(string code, AppDbContext db, CancellationToken ct)
+    private static async Task<IResult> DeleteAsync(string code, AppDbContext db, HttpContext http, CancellationToken ct)
     {
-        var deleted = await db.Links.Where(l => l.Code == code).ExecuteDeleteAsync(ct);
-        return deleted == 0 ? Results.NotFound() : Results.NoContent();
+        var link = await db.Links.FirstOrDefaultAsync(l => l.Code == code, ct);
+        if (link is null) return Results.NotFound();
+
+        // Ownership: only the holder of the manage token issued at creation may delete. Unknown codes stay 404 (codes are
+        // public anyway); a missing or wrong token is 403 and leaves the link untouched.
+        var presented = http.Request.Headers[ManageToken.HeaderName].ToString();
+        if (!ManageToken.Matches(presented, link.ManageTokenHash))
+            return Results.Problem(
+                $"A valid manage token is required to delete this link. Send it in the {ManageToken.HeaderName} header; it was returned once when the link was created.",
+                statusCode: StatusCodes.Status403Forbidden);
+
+        db.Links.Remove(link);
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> RedirectAsync(string code, AppDbContext db, ClickQueue clicks, HttpContext http, CancellationToken ct)
@@ -153,9 +170,15 @@ public static class LinkEndpoints
 
     private static LinkResponse ToResponse(ShortLink link, HttpContext http)
     {
-        var shortUrl = $"{http.Request.Scheme}://{http.Request.Host}/{link.Code}";
-        return new LinkResponse(link.Code, shortUrl, link.OriginalUrl, link.IsCustomAlias, link.CreatedAt, link.ExpiresAt);
+        return new LinkResponse(link.Code, ShortUrl(link, http), link.OriginalUrl, link.IsCustomAlias, link.CreatedAt, link.ExpiresAt);
     }
+
+    private static CreatedLinkResponse ToCreatedResponse(ShortLink link, HttpContext http, string manageToken)
+    {
+        return new CreatedLinkResponse(link.Code, ShortUrl(link, http), link.OriginalUrl, link.IsCustomAlias, link.CreatedAt, link.ExpiresAt, manageToken);
+    }
+
+    private static string ShortUrl(ShortLink link, HttpContext http) => $"{http.Request.Scheme}://{http.Request.Host}/{link.Code}";
 
     private static string? Truncate(string? value, int max)
         => string.IsNullOrEmpty(value) ? null : value.Length <= max ? value : value[..max];

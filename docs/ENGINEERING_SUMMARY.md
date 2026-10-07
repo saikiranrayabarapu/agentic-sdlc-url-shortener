@@ -10,7 +10,7 @@ engineering output. The plan was therefore layered:
    waves, entry/exit gates, bounded retries, a cross-stage repair loop, change requests, clarification-driven
    re-planning, a policy engine, human approval providers, snapshots/rollback, safe-stop/resume, a hash-chained audit
    log and reliability metrics.
-2. Build the URL shortener to production standards independently (49 tests), then **derive the three scenario
+2. Build the URL shortener to production standards independently (62 tests), then **derive the three scenario
    recordings from it**: version 1.0 (greenfield), the analytics delta (brownfield, including a deliberately broken
    first attempt), and the reliability delta (ambiguous, including an infeasible first design).
 3. Make the default mode reproducible without any API key (replay), while keeping live model modes available through
@@ -31,7 +31,8 @@ unit tests pin each governance path.
 | Orchestration engine, agents, policy, approvals, audit, metrics | `src/AgenticSdlc.Core` |
 | CLI + HTTP API host | `src/AgenticSdlc.Host` |
 | Angular dashboard | `dashboard/` |
-| URL shortener service (final, v1.2) | `src/UrlShortener.Api` |
+| URL shortener service (final, v1.3: API + web UI) | `src/UrlShortener.Api` |
+| Shortener web UI (TinyURL-style page: shorten, copy, recent links with click stats; no framework, no build step) | `src/UrlShortener.Api/wwwroot` |
 | Shortener tests | `tests/UrlShortener.Api.Tests` |
 | Engine tests | `tests/AgenticSdlc.Core.Tests` |
 | Recorded agent outputs per scenario (requirement specs, design docs with ADRs, change sets, release reports) | `fixtures/replay/{greenfield,brownfield,ambiguous}` |
@@ -47,14 +48,18 @@ unit tests pin each governance path.
 |---|---|---|
 | Model output is unreliable (hallucinated success, malformed JSON) | Agents only *propose*; exit gates are deterministic where it matters (real build + tests); JSON contracts are validated and violations become feedback | brownfield run: compiler error caught and repaired; engine tests for contract failures |
 | Unreviewed changes reaching code | Policy gate + approval gate sit between proposal and apply; approvals audited with actor; rejection halts | engine tests `Rejected_approval_halts...`, `Policy_blocks_secrets...`; console + API manual runs |
-| Runaway loops / cost | Bounded per-node retries, repair budget, re-plan budget, max run duration, safe-stop | `Repair_budget_is_bounded...`, injected-failure CI job |
+| Runaway loops / cost | Bounded per-node retries, repair budget, re-plan budget, max run duration, safe-stop | `Repair_budget_is_bounded...`, injected-failure headless run (README quick start) |
 | Partial changes after failure | Snapshot before every apply; rollback to the pre-change baseline on exhaustion | `Exhausted_retries_roll_back...`; injected-failure run restores the seeded baseline |
 | Ambiguous requirements silently "resolved" by the model | High-impact ambiguities force a human clarification checkpoint; answers are recorded and hashed into downstream artifacts; approval tightens afterwards | ambiguous scenario; `Clarification_pauses_for_a_human...` |
 | Upstream changes invalidating in-flight work | Change requests invalidate dependents; staleness gate discards results computed from superseded inputs | `Change_request_invalidates...`; ambiguous run trace |
 | Audit log tampering | SHA-256 hash chain, `--verify` | `Hash_chain_verifies_and_detects_tampering` |
 | Replay mode could be mistaken for live autonomy | Documented plainly; same agent code runs live with `--mode anthropic` / `--mode claude-cli`; `--record` writes new fixtures; fallback to replay is audited as `Fallback` | manual connectivity check of the CLI mode; `Fallback_client_uses_replay...` |
 | SQLite as the product store | Chosen for zero-step local runs; EF Core keeps PostgreSQL cheap; limitations documented in the product README and release reports | product tests; release risk registers |
-| Fixed-window rate limiting is per instance | Accepted within the clarified single-instance scope; documented as a limitation | `RateLimitTests`; release report Warn item |
+| Fixed-window rate limiting is per instance | Partitioned per client address so one abusive caller cannot exhaust everyone's budget; still in-memory per instance, accepted within the clarified single-instance scope | `RateLimitTests`, `PerClientRateLimitTests`; release report Warn item |
+| A short code is public, so anyone could delete a link | Anonymous ownership: creation returns a manage token exactly once, only its SHA-256 is stored, delete requires it (constant-time comparison); the web page keeps the token with the recent-links entry | `OwnershipTests`; manual run against the service |
+| Engine-side I/O failure after an agent returns | State saves retry briefly on Windows file collisions; any other engine exception halts the run safely (`SafeStop`) and leaves it resumable instead of crashing the process | `RunStoreTests`, `EngineRobustnessTests`; 4/4 injected-failure runs end in `RolledBack` |
+| Readiness checks could be satisfied by a keyword in a comment | Checks run over comment-stripped sources and require real registrations: a mapped route, a limiter registered and enforced, a hosted service that drains on cancellation | `OperationalReadinessAgentTests`; ambiguous scenario 7/7 |
+| Web UI could expose or shadow API behaviour | No "list every link" endpoint (the recent list is client-side `localStorage`); the redirect route is constrained to the short-code alphabet so asset paths never query the database; the page has no dependencies, so the policy allow-list is untouched | `UiTests`; manual run against the service |
 
 ## Assumptions
 
@@ -77,6 +82,11 @@ unit tests pin each governance path.
 - Approval decisions are not cryptographically signed; the audit chain proves integrity of the log, not the identity
   of the approver.
 - Metrics are computed from run state files; there is no time-series store.
+- The shortener's web UI is anonymous: there are no accounts, so "your recent links" lives in the browser's
+  `localStorage` and the server offers no list-all endpoint. Deleting requires the manage token issued at creation, so
+  a code alone grants no control; losing the token (clearing browser storage) means the link can no longer be deleted
+  through the API, the accepted trade-off of having no accounts. Links created before v1.3 carry no token and cannot
+  be deleted through the API either.
 
 ## Controlled autonomy, in one paragraph
 
